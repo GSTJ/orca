@@ -8,6 +8,7 @@ import type {
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
+import { failedManagedAccountUsageResult } from './managed-account-usage-error'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
 import { mapClaudeUsageWindow } from './claude-usage-window'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
@@ -565,7 +566,7 @@ export class RateLimitService {
           }
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
           this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
-        } catch {
+        } catch (error) {
           // Why: per-account try/catch keeps one Keychain/network error from aborting the remaining accounts in the batch.
           if (
             signal.aborted ||
@@ -573,6 +574,16 @@ export class RateLimitService {
             !this.isCurrentInactiveClaudeAccount(account.id)
           ) {
             this.inactiveClaudeCache.delete(account.id)
+          } else {
+            // Why: keep last-known usage when there is some, otherwise record the
+            // failure. Recording nothing drops the account out of the inactive
+            // array, and its switcher row then renders blank instead of offering
+            // a re-auth, which reads as "no usage" rather than "could not read".
+            const cached = this.inactiveClaudeCache.get(account.id) ?? null
+            this.inactiveClaudeCache.set(
+              account.id,
+              cached ?? failedManagedAccountUsageResult('claude', error)
+            )
           }
         }
         this.inactiveClaudeFetching.delete(account.id)
@@ -645,7 +656,7 @@ export class RateLimitService {
           }
           const cached = this.inactiveCodexCache.get(account.id) ?? null
           this.inactiveCodexCache.set(account.id, this.applyStalePolicy(fresh, cached))
-        } catch {
+        } catch (error) {
           // Why: per-account try/catch prevents one failure from aborting the batch.
           if (
             signal.aborted ||
@@ -653,6 +664,14 @@ export class RateLimitService {
             !this.isCurrentInactiveCodexAccount(account.id)
           ) {
             this.inactiveCodexCache.delete(account.id)
+          } else {
+            // Why: same reason as the Claude branch above — recording nothing
+            // drops the row's usage and its sign-in affordance with it.
+            const cached = this.inactiveCodexCache.get(account.id) ?? null
+            this.inactiveCodexCache.set(
+              account.id,
+              cached ?? failedManagedAccountUsageResult('codex', error)
+            )
           }
         }
         this.inactiveCodexFetching.delete(account.id)

@@ -1820,6 +1820,34 @@ describe('RateLimitService', () => {
     ])
   })
 
+  // Why: a thrown read used to record nothing, so the account vanished from the
+  // inactive array and its switcher row rendered blank, which reads as "no
+  // usage" and hides the re-auth affordance.
+  it('records an error snapshot when an inactive Claude account fetch throws', async () => {
+    const service = new RateLimitService()
+    service.setInactiveClaudeAccountsResolver(() => [
+      { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+    ])
+    vi.mocked(fetchManagedAccountUsage).mockRejectedValueOnce(new Error('Keychain denied'))
+
+    await service.fetchInactiveClaudeAccountsOnOpen()
+
+    expect(service.getState().inactiveClaudeAccounts).toEqual([
+      {
+        accountId: 'account-1',
+        rateLimits: expect.objectContaining({
+          provider: 'claude',
+          session: null,
+          weekly: null,
+          status: 'error',
+          error: 'Keychain denied'
+        }),
+        updatedAt: expect.any(Number),
+        isFetching: false
+      }
+    ])
+  })
+
   it('allows usage-panel Fable supplements for inactive Claude account previews', async () => {
     const service = new RateLimitService()
     const account = { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
