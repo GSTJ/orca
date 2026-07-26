@@ -13031,7 +13031,9 @@
           "a21f6c33ad": "Origen de automatización actualizado.",
           "53f06f0ad5": "Reintentar origen",
           "pendingAutomationMissing": "La automatización ya no está disponible.",
-          "pendingAutomationRunMissing": "El historial de ejecuciones ya no está disponible."
+          "pendingAutomationRunMissing": "El historial de ejecuciones ya no está disponible.",
+          "allHosts": "All hosts",
+          "environmentSelector": "Automation host"
         },
         "CreateFromPicker": {
           "f061f49e3f": "Buscar ramas del repositorio...",

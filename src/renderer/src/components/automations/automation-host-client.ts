@@ -227,3 +227,32 @@ export async function runAutomationNowForTarget(
   )
   return result.run
 }
+
+/** Sentinel host key meaning "read every host at once". */
+export const ALL_AUTOMATION_HOSTS_KEY = 'all'
+
+export type AutomationHostListing = {
+  target: AutomationHostTarget
+  automations: Automation[] | null
+}
+
+/**
+ * List automations from several hosts at once.
+ *
+ * A host that fails yields a null listing instead of rejecting, because one
+ * unreachable environment must not empty a list that is mostly reachable.
+ */
+export async function listAutomationsForTargets(
+  targets: readonly AutomationHostTarget[]
+): Promise<AutomationHostListing[]> {
+  const settled = await Promise.allSettled(
+    targets.map(async (target) => await listAutomationsForTarget(target))
+  )
+  return targets.map((target, index) => {
+    const result = settled[index]
+    return {
+      target,
+      automations: result && result.status === 'fulfilled' ? result.value : null
+    }
+  })
+}

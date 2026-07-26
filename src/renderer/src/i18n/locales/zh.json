@@ -13031,7 +13031,9 @@
           "a21f6c33ad": "自动化来源已刷新。",
           "53f06f0ad5": "重试来源",
           "pendingAutomationMissing": "自动化已不可用。",
-          "pendingAutomationRunMissing": "运行历史已不可用。"
+          "pendingAutomationRunMissing": "运行历史已不可用。",
+          "allHosts": "All hosts",
+          "environmentSelector": "Automation host"
         },
         "CreateFromPicker": {
           "f061f49e3f": "搜索仓库分支...",

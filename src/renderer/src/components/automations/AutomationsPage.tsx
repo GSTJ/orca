@@ -131,6 +131,9 @@ import {
 } from './external-automation-source-availability'
 import {
   buildAutomationListHostOptions,
+  listAutomationsForTargets,
+  ALL_AUTOMATION_HOSTS_KEY,
+  type AutomationHostTarget,
   createAutomationForTarget,
   deleteAutomationForTarget,
   getAutomationHostTargetFromKey,
@@ -144,6 +147,7 @@ import {
   runAutomationNowForTarget,
   updateAutomationForTarget
 } from './automation-host-client'
+import { mergeAutomationListings } from './automation-host-fanout'
 import {
   Select,
   SelectContent,
@@ -400,6 +404,11 @@ export default function AutomationsPage(): React.JSX.Element {
   const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<AutomationRun[]>([])
   const [automationHostTargetKey, setAutomationHostTargetKey] = useState<string | null>(null)
+  // Why: with every host listed at once, an action has to go back to the host
+  // the automation actually came from, not to whatever the list last read.
+  const [automationHostById, setAutomationHostById] = useState<
+    ReadonlyMap<string, AutomationHostTarget>
+  >(() => new Map())
   const [selectedAutomationRuns, setSelectedAutomationRuns] = useState<{
     automationId: string | null
     runs: AutomationRun[]
@@ -646,6 +655,11 @@ export default function AutomationsPage(): React.JSX.Element {
   const automationHostTarget = useMemo(
     () => getAutomationHostTargetFromKey(automationHostTargetKey),
     [automationHostTargetKey]
+  )
+  const hostForAutomation = useCallback(
+    (automation: Pick<Automation, 'id'>): AutomationHostTarget | null =>
+      automationHostById.get(automation.id) ?? automationHostTarget,
+    [automationHostById, automationHostTarget]
   )
 
   useEffect(() => {
@@ -990,15 +1004,28 @@ export default function AutomationsPage(): React.JSX.Element {
   }, [activeWorktreeId, repoMap, repos, worktreeMap, worktreesByRepo])
 
   const automationListHostOptions = useMemo(
-    () =>
-      buildAutomationListHostOptions({
+    () => [
+      {
+        key: ALL_AUTOMATION_HOSTS_KEY,
+        label: translate('auto.components.automations.AutomationsPage.allHosts', 'All hosts'),
+        target: { kind: 'local' as const }
+      },
+      ...buildAutomationListHostOptions({
         localLabel: getLocalExecutionHostLabel(),
         environments: runtimeEnvironments.map((environment) => ({
           id: environment.id,
           name: environment.name
         }))
-      }),
+      })
+    ],
     [runtimeEnvironments]
+  )
+  const automationFanoutTargets = useMemo(
+    () =>
+      automationListHostOptions
+        .filter((option) => option.key !== ALL_AUTOMATION_HOSTS_KEY)
+        .map((option) => option.target),
+    [automationListHostOptions]
   )
 
   const refresh = useCallback(async () => {
@@ -1011,12 +1038,24 @@ export default function AutomationsPage(): React.JSX.Element {
       selectedKey: automationHostTargetKey,
       settings
     })
+    // Why: default to every host so an automation on a non-active runtime is
+    // visible instead of silently missing (#9964).
+    const listAllHosts =
+      !pendingNavigation &&
+      (automationHostTargetKey === null || automationHostTargetKey === ALL_AUTOMATION_HOSTS_KEY)
     try {
-      const [nextAutomations, nextRuns, nextExternalManagers] = await Promise.all([
-        listAutomationsForTarget(automationHostTarget),
+      const [nextListings, nextRuns, nextExternalManagers] = await Promise.all([
+        listAllHosts
+          ? listAutomationsForTargets(automationFanoutTargets)
+          : listAutomationsForTargets([automationHostTarget]),
         listAutomationRunsForTarget(automationHostTarget),
         window.api.automations.listExternalManagers()
       ])
+      const merged = mergeAutomationListings(nextListings)
+      const nextAutomations = merged.automations.map((row) => row.automation)
+      setAutomationHostById(
+        new Map(merged.automations.map((row) => [row.automation.id, row.target]))
+      )
       const currentSelectedId = useAppStore.getState().selectedAutomationId
       const hasCurrentSelection = nextAutomations.some(
         (automation) => automation.id === currentSelectedId
@@ -1050,7 +1089,7 @@ export default function AutomationsPage(): React.JSX.Element {
     } finally {
       setIsLoading(false)
     }
-  }, [automationHostTargetKey, selectAutomationId, settings])
+  }, [automationFanoutTargets, automationHostTargetKey, selectAutomationId, settings])
 
   const handleAutomationHostTargetChange = useCallback(
     (nextKey: string) => {
@@ -1119,7 +1158,7 @@ export default function AutomationsPage(): React.JSX.Element {
       pendingAutomationRunNavigation.hostId
         ? getAutomationTargetFromHostId(pendingAutomationRunNavigation.hostId)
         : selected
-          ? getAutomationOwnerTarget(selected, automationHostTarget)
+          ? getAutomationOwnerTarget(selected, hostForAutomation(selected))
           : getAutomationListTarget(settings)
     void listAutomationRunsForTarget(target, automationId).then((nextRuns) => {
       if (!cancelled) {
@@ -1702,7 +1741,11 @@ export default function AutomationsPage(): React.JSX.Element {
       }
       const automation = editingAutomationId
         ? currentAutomation
-          ? await updateAutomationForTarget(currentAutomation, updates, automationHostTarget)
+          ? await updateAutomationForTarget(
+              currentAutomation,
+              updates,
+              hostForAutomation(currentAutomation)
+            )
           : await window.api.automations.update({
               id: editingAutomationId,
               updates
@@ -1767,13 +1810,13 @@ export default function AutomationsPage(): React.JSX.Element {
     await updateAutomationForTarget(
       automation,
       { enabled: !automation.enabled },
-      automationHostTarget
+      hostForAutomation(automation)
     )
     await refresh()
   }
 
   const deleteAutomation = async (automation: Automation): Promise<void> => {
-    await deleteAutomationForTarget(automation, automationHostTarget)
+    await deleteAutomationForTarget(automation, hostForAutomation(automation))
     if (useAppStore.getState().selectedAutomationId === automation.id) {
       selectAutomationId(null)
     }

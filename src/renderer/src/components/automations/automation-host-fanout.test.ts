@@ -1,35 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { Automation } from '../../../../shared/types'
-import {
-  getAutomationListTargets,
-  mergeAutomationListings,
-  targetKey
-} from './automation-host-fanout'
+import type { Automation } from '../../../../shared/automations-types'
+import { getAutomationHostTargetKey } from './automation-host-client'
+import { mergeAutomationListings } from './automation-host-fanout'
 
 function automation(id: string): Automation {
   return { id, name: id } as unknown as Automation
 }
-
-describe('getAutomationListTargets', () => {
-  it('always reads local, even with no environments', () => {
-    expect(getAutomationListTargets([])).toEqual([{ kind: 'local' }])
-  })
-
-  it('reads local plus every saved environment', () => {
-    expect(getAutomationListTargets([{ id: 'env-1' }, { id: 'env-2' }])).toEqual([
-      { kind: 'local' },
-      { kind: 'environment', environmentId: 'env-1' },
-      { kind: 'environment', environmentId: 'env-2' }
-    ])
-  })
-
-  it('ignores blank and repeated environment ids', () => {
-    expect(getAutomationListTargets([{ id: 'env-1' }, { id: ' ' }, { id: 'env-1' }])).toEqual([
-      { kind: 'local' },
-      { kind: 'environment', environmentId: 'env-1' }
-    ])
-  })
-})
 
 describe('mergeAutomationListings', () => {
   it('keeps each automation tagged with the host it came from', () => {
@@ -38,7 +14,9 @@ describe('mergeAutomationListings', () => {
       { target: { kind: 'environment', environmentId: 'env-1' }, automations: [automation('b')] }
     ])
 
-    expect(merged.automations.map((row) => [row.automation.id, targetKey(row.target)])).toEqual([
+    expect(
+      merged.automations.map((row) => [row.automation.id, getAutomationHostTargetKey(row.target)])
+    ).toEqual([
       ['a', 'local'],
       ['b', 'environment:env-1']
     ])
@@ -67,7 +45,7 @@ describe('mergeAutomationListings', () => {
     ])
 
     expect(merged.automations).toHaveLength(1)
-    expect(targetKey(merged.automations[0]!.target)).toBe('local')
+    expect(getAutomationHostTargetKey(merged.automations[0]!.target)).toBe('local')
   })
 
   it('does not report a failed local listing as an unreachable environment', () => {
