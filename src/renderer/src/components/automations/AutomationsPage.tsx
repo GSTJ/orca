@@ -1076,7 +1076,9 @@ export default function AutomationsPage(): React.JSX.Element {
       // Why: pending navigation only temporarily targets a host for the deep-link
       // refresh — do not overwrite the user's explicit selector choice (#10347).
       if (!pendingNavigation) {
-        setAutomationHostTargetKey(getAutomationHostTargetKey(automationHostTarget))
+        setAutomationHostTargetKey(
+          listAllHosts ? ALL_AUTOMATION_HOSTS_KEY : getAutomationHostTargetKey(automationHostTarget)
+        )
       }
       setSelectedAutomationRuns({
         automationId: nextSelectedId,
@@ -2256,7 +2258,7 @@ export default function AutomationsPage(): React.JSX.Element {
         <div className="flex items-center gap-2">
           {automationListHostOptions.length > 1 ? (
             <Select
-              value={automationHostTargetKey ?? 'local'}
+              value={automationHostTargetKey ?? ALL_AUTOMATION_HOSTS_KEY}
               onValueChange={handleAutomationHostTargetChange}
             >
               <SelectTrigger
