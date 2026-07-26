@@ -34,6 +34,8 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { InlineUsageBars, InlineUsageSkeleton } from '../status-bar/inline-usage-bars'
+import { describeUsageFailure } from '../status-bar/usage-availability'
+import { formatUsageResetSummary } from '../status-bar/usage-reset-summary'
 import { resolveClaudeRowUsage } from './claude-account-usage'
 import {
   ClaudeIcon,
@@ -338,6 +340,7 @@ export function AccountsPane({
   const claudeRateLimitTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
+  const refreshAllAccountUsage = useAppStore((s) => s.refreshAllAccountUsage)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
@@ -458,6 +461,7 @@ export function AccountsPane({
   // Why: without a settled flag a row whose account never gets a cache entry
   // would show the loading skeleton for the life of the pane.
   const [claudeUsageFetchSettled, setClaudeUsageFetchSettled] = useState(false)
+  const [claudeUsageRefreshing, setClaudeUsageRefreshing] = useState(false)
   useEffect(() => {
     // Why: mirrors the switcher's fetch-on-open (StatusBar) so opening this pane
     // fills inactive-account usage. The service debounces, so a revisit is cheap.
@@ -886,6 +890,25 @@ export function AccountsPane({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
+              {claudeUsageVisible ? (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    setClaudeUsageRefreshing(true)
+                    void refreshAllAccountUsage().finally(() => setClaudeUsageRefreshing(false))
+                  }}
+                  disabled={claudeUsageRefreshing}
+                  className="gap-1.5 text-muted-foreground hover:text-foreground"
+                >
+                  {claudeUsageRefreshing ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-3" />
+                  )}
+                  {translate('auto.components.settings.AccountsPane.refreshUsage', 'Refresh usage')}
+                </Button>
+              ) : null}
               <Button
                 variant="outline"
                 size="xs"
@@ -1057,25 +1080,34 @@ export function AccountsPane({
                           </div>
                           <span className="truncate text-[11px] text-muted-foreground">
                             {account.organizationName
-                              ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
-                              : formatAccountTimestamp(account.lastAuthenticatedAt)}
+                              ? `${account.organizationName} · ${translate('auto.components.settings.AccountsPane.connectedAt', 'connected')} ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
+                              : `${translate('auto.components.settings.AccountsPane.connectedAt', 'connected')} ${formatAccountTimestamp(account.lastAuthenticatedAt)}`}
                           </span>
                         </button>
                         {usage.kind === 'hidden' ? null : (
                           <div className="mt-1 w-full max-w-xs">
                             {usage.kind === 'ready' ? (
-                              <InlineUsageBars
-                                limits={usage.limits}
-                                isFetching={usage.isFetching}
-                              />
+                              <>
+                                <InlineUsageBars
+                                  limits={usage.limits}
+                                  isFetching={usage.isFetching}
+                                />
+                                {formatUsageResetSummary(usage.limits) ? (
+                                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                                    {formatUsageResetSummary(usage.limits)}
+                                  </span>
+                                ) : null}
+                              </>
                             ) : usage.kind === 'loading' ? (
                               <InlineUsageSkeleton />
                             ) : (
                               <span className="text-[10px] text-muted-foreground">
-                                {translate(
-                                  'auto.components.settings.AccountsPane.3f6c8d220e',
-                                  'Usage unavailable'
-                                )}
+                                {usage.limits
+                                  ? describeUsageFailure(usage.limits)
+                                  : translate(
+                                      'auto.components.settings.AccountsPane.3f6c8d220e',
+                                      'Usage unavailable'
+                                    )}
                               </span>
                             )}
                           </div>

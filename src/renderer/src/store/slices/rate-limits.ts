@@ -10,6 +10,7 @@ export type RateLimitSlice = {
   refreshClaudeRateLimitsForTarget: (target: RateLimitRuntimeTarget) => Promise<void>
   refreshCodexRateLimitsForTarget: (target: RateLimitRuntimeTarget) => Promise<void>
   consumeCodexRateLimitResetCredit: () => Promise<void>
+  refreshAllAccountUsage: () => Promise<void>
   fetchInactiveClaudeAccountUsage: () => Promise<void>
   fetchInactiveCodexAccountUsage: () => Promise<void>
   setRateLimitsFromPush: (state: RateLimitState) => void
@@ -127,6 +128,14 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     } catch (error) {
       console.error('Failed to consume Codex rate-limit reset:', error)
       throw error
+    }
+  },
+
+  refreshAllAccountUsage: async () => {
+    try {
+      await window.api.rateLimits.refreshAllAccounts()
+    } catch (error) {
+      console.error('Failed to refresh account usage:', error)
     }
   },
 

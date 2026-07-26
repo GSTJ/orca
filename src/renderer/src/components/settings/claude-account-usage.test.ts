@@ -83,13 +83,13 @@ describe('resolveClaudeRowUsage', () => {
   it('reports unavailable when the active poll failed', () => {
     expect(
       resolveClaudeRowUsage({ ...base, isActive: true, activeLimits: failedLimits() })
-    ).toEqual({ kind: 'unavailable' })
+    ).toEqual({ kind: 'unavailable', limits: failedLimits() })
   })
 
   it('reports unavailable when an inactive account failed to authenticate', () => {
     expect(
       resolveClaudeRowUsage({ ...base, inactiveAccounts: [entry({ rateLimits: failedLimits() })] })
-    ).toEqual({ kind: 'unavailable' })
+    ).toEqual({ kind: 'unavailable', limits: failedLimits() })
   })
 
   it('shows a missing inactive entry as loading until the fetch settles', () => {
@@ -100,13 +100,15 @@ describe('resolveClaudeRowUsage', () => {
   // after ours settled would otherwise skeleton for the life of the pane.
   it('stops loading a missing inactive entry once the fetch settled', () => {
     expect(resolveClaudeRowUsage({ ...base, inactiveFetchSettled: true })).toEqual({
-      kind: 'unavailable'
+      kind: 'unavailable',
+      limits: null
     })
   })
 
   it('reports unavailable for a settled inactive entry carrying no snapshot', () => {
     expect(resolveClaudeRowUsage({ ...base, inactiveAccounts: [entry({})] })).toEqual({
-      kind: 'unavailable'
+      kind: 'unavailable',
+      limits: null
     })
   })
 

@@ -5,7 +5,7 @@ export type ClaudeRowUsage =
   | { kind: 'hidden' }
   | { kind: 'loading' }
   | { kind: 'ready'; limits: ProviderRateLimits; isFetching: boolean }
-  | { kind: 'unavailable' }
+  | { kind: 'unavailable'; limits: ProviderRateLimits | null }
 
 /**
  * Picks what an Accounts-pane Claude row should show for usage.
@@ -44,7 +44,7 @@ export function resolveClaudeRowUsage({
       return { kind: 'loading' }
     }
     if (isUnavailableInactiveUsage(activeLimits)) {
-      return { kind: 'unavailable' }
+      return { kind: 'unavailable', limits: activeLimits }
     }
     return {
       kind: 'ready',
@@ -56,14 +56,14 @@ export function resolveClaudeRowUsage({
   if (!entry) {
     // Why: nothing re-runs the inactive fetch on its own, so once ours settles a
     // still-missing entry is the final answer rather than a pending one.
-    return inactiveFetchSettled ? { kind: 'unavailable' } : { kind: 'loading' }
+    return inactiveFetchSettled ? { kind: 'unavailable', limits: null } : { kind: 'loading' }
   }
   if (entry.rateLimits) {
     // Why: a failed credential read comes back as a snapshot with every window
     // null, not as a null snapshot. Without this it renders as usable data.
     return isUnavailableInactiveUsage(entry.rateLimits)
-      ? { kind: 'unavailable' }
+      ? { kind: 'unavailable', limits: entry.rateLimits }
       : { kind: 'ready', limits: entry.rateLimits, isFetching: entry.isFetching }
   }
-  return entry.isFetching ? { kind: 'loading' } : { kind: 'unavailable' }
+  return entry.isFetching ? { kind: 'loading' } : { kind: 'unavailable', limits: null }
 }

@@ -8,7 +8,12 @@ import type {
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
-import { failedManagedAccountUsageResult } from './managed-account-usage-error'
+import {
+  failedManagedAccountUsageResult,
+  hasUsableUsageWindow
+} from './managed-account-usage-error'
+import { classifyClaudeOAuthUsageError } from './claude-usage-error-classification'
+import { OAuthUsageError } from './claude-oauth-usage-error'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
 import { mapClaudeUsageWindow } from './claude-usage-window'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
@@ -511,8 +516,27 @@ export class RateLimitService {
     await this.fetchClaudeOnly({ force: true })
   }
 
-  async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
-    if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+  /**
+   * Refresh the active providers and every managed account in one pass.
+   *
+   * Backs the Accounts pane refresh control, so a throttled or offline account
+   * can be retried without switching into it or reopening the switcher.
+   */
+  async refreshAllAccounts(): Promise<void> {
+    await Promise.allSettled([
+      this.refresh(),
+      this.fetchInactiveClaudeAccountsOnOpen({ force: true }),
+      this.fetchInactiveCodexAccountsOnOpen({ force: true })
+    ])
+  }
+
+  async fetchInactiveClaudeAccountsOnOpen(options: { force?: boolean } = {}): Promise<void> {
+    // Why: an explicit refresh must not be swallowed by the open-debounce, which
+    // exists to stop repeated menu opens from re-polling every account.
+    if (
+      options.force !== true &&
+      Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS
+    ) {
       return
     }
     this.pruneInactiveClaudeState()
@@ -580,9 +604,18 @@ export class RateLimitService {
             // array, and its switcher row then renders blank instead of offering
             // a re-auth, which reads as "no usage" rather than "could not read".
             const cached = this.inactiveClaudeCache.get(account.id) ?? null
+            // Why: carry the classified reason so a throttled account reads as
+            // rate limited rather than as one needing a fresh sign-in, and so
+            // the retry pass knows which failures can clear on their own.
+            const retryAfterMs = error instanceof OAuthUsageError ? error.retryAfterMs : null
             this.inactiveClaudeCache.set(
               account.id,
-              cached ?? failedManagedAccountUsageResult('claude', error)
+              hasUsableUsageWindow(cached)
+                ? cached
+                : failedManagedAccountUsageResult('claude', error, {
+                    failureKind: classifyClaudeOAuthUsageError(error).failureKind,
+                    retryAtMs: retryAfterMs ? Date.now() + retryAfterMs : undefined
+                  })
             )
           }
         }
@@ -598,8 +631,11 @@ export class RateLimitService {
     }
   }
 
-  async fetchInactiveCodexAccountsOnOpen(): Promise<void> {
-    if (Date.now() - this.lastInactiveCodexFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+  async fetchInactiveCodexAccountsOnOpen(options: { force?: boolean } = {}): Promise<void> {
+    if (
+      options.force !== true &&
+      Date.now() - this.lastInactiveCodexFetchAt < INACTIVE_FETCH_DEBOUNCE_MS
+    ) {
       return
     }
     this.pruneInactiveCodexState()
@@ -670,7 +706,9 @@ export class RateLimitService {
             const cached = this.inactiveCodexCache.get(account.id) ?? null
             this.inactiveCodexCache.set(
               account.id,
-              cached ?? failedManagedAccountUsageResult('codex', error)
+              hasUsableUsageWindow(cached)
+                ? cached
+                : failedManagedAccountUsageResult('codex', error)
             )
           }
         }

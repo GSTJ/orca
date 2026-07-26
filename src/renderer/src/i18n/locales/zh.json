@@ -3336,6 +3336,21 @@
             "updatedTooltip": "Remote Orca Server updates completed",
             "failedOne": "1 server update failed",
             "updatedOne": "1 server updated"
+          },
+          "usage": {
+            "availability": {
+              "rateLimited": "Rate limited, retrying",
+              "offline": "Offline, retrying",
+              "retrying": "Usage unavailable, retrying",
+              "deferred": "Waiting for the live session",
+              "keychain": "Keychain unavailable"
+            },
+            "reset": {
+              "session": "session",
+              "weekly": "weekly",
+              "fable": "Fable",
+              "prefix": "Resets"
+            }
           }
         }
       },
@@ -5046,7 +5061,9 @@
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
           "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
-          "3f6c8d220e": "Usage unavailable"
+          "3f6c8d220e": "Usage unavailable",
+          "refreshUsage": "Refresh usage",
+          "connectedAt": "connected"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",

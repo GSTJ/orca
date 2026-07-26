@@ -100,6 +100,7 @@ import {
   InlineUsageSkeleton,
   isUnavailableInactiveUsage
 } from './inline-usage-bars'
+import { usageFailureNeedsSignIn } from './usage-availability'
 import {
   normalizeStatusBarUsageMode,
   type StatusBarUsageMode
@@ -1674,7 +1675,8 @@ export function CodexSwitcherMenu({
                     !hasActiveRuntimeEnvironment &&
                     !target.active &&
                     target.id !== null &&
-                    isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
+                    isUnavailableInactiveUsage(inactiveUsage?.rateLimits) &&
+                    usageFailureNeedsSignIn(inactiveUsage?.rateLimits)
                   const isSigningIn = reauthenticatingAccountId === target.id
                   const isBusy = isSwitching || reauthenticatingAccountId !== null
 

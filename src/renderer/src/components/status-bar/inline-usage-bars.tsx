@@ -11,6 +11,8 @@ import {
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { barColor, clampUsedPercent } from './tooltip'
 
+import { describeUsageFailure } from './usage-availability'
+
 export { isUnavailableInactiveUsage } from './usage-availability'
 
 // Compact usage bars for accounts the user is not currently signed in as.
@@ -73,9 +75,7 @@ export function InlineUsageBars({
         </div>
       ))}
       {usageWindows.length === 0 && limits.status === 'error' ? (
-        <span className="text-[10px] text-muted-foreground">
-          {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
-        </span>
+        <span className="text-[10px] text-muted-foreground">{describeUsageFailure(limits)}</span>
       ) : null}
     </div>
   )
