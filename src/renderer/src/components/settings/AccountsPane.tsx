@@ -34,7 +34,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { InlineUsageBars, InlineUsageSkeleton } from '../status-bar/inline-usage-bars'
-import { describeUsageFailure } from '../status-bar/usage-availability'
+import { describeUsageFailure, usageFailureNeedsSignIn } from '../status-bar/usage-availability'
 import { formatUsageResetSummary } from '../status-bar/usage-reset-summary'
 import { resolveClaudeRowUsage } from './claude-account-usage'
 import {
@@ -1029,14 +1029,21 @@ export function AccountsPane({
                   inactiveAccounts: inactiveClaudeAccounts,
                   inactiveFetchSettled: claudeUsageFetchSettled
                 })
+                // Why: switching into an account Anthropic rejects restarts live
+                // terminals onto credentials that cannot serve a request, so the
+                // row has to send the user through re-auth first.
+                const needsSignIn =
+                  usage.kind === 'unavailable' && usageFailureNeedsSignIn(usage.limits)
 
                 return (
                   <div
                     key={account.id}
                     className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-                      isActive
-                        ? 'border-foreground/20 bg-accent/15'
-                        : 'border-border/70 hover:border-border hover:bg-accent/8'
+                      needsSignIn
+                        ? 'border-destructive/50 bg-destructive/5'
+                        : isActive
+                          ? 'border-foreground/20 bg-accent/15'
+                          : 'border-border/70 hover:border-border hover:bg-accent/8'
                     }`}
                   >
                     <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
@@ -1055,7 +1062,7 @@ export function AccountsPane({
                               accountRuntimeView
                             )
                           }}
-                          disabled={isBusy}
+                          disabled={isBusy || needsSignIn}
                           className="flex min-w-0 flex-col gap-0.5 text-left disabled:cursor-default"
                         >
                           <div className="flex min-w-0 items-center gap-2">
@@ -1074,6 +1081,17 @@ export function AccountsPane({
                                 {translate(
                                   'auto.components.settings.AccountsPane.e74831fb6b',
                                   'Active'
+                                )}
+                              </Badge>
+                            ) : null}
+                            {needsSignIn ? (
+                              <Badge
+                                variant="destructive"
+                                className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
+                              >
+                                {translate(
+                                  'auto.components.settings.AccountsPane.589eba1eee',
+                                  'Needs re-auth'
                                 )}
                               </Badge>
                             ) : null}

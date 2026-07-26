@@ -100,6 +100,7 @@ import {
   InlineUsageSkeleton,
   isUnavailableInactiveUsage
 } from './inline-usage-bars'
+import { isUnavailableInactiveUsage as isUnavailableUsage } from './usage-availability'
 import { usageFailureNeedsSignIn } from './usage-availability'
 import {
   normalizeStatusBarUsageMode,
@@ -911,11 +912,17 @@ export function ClaudeSwitcherMenu({
               const inactiveUsage = target.id
                 ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
                 : null
+              // Why: switching in would restart live terminals onto credentials
+              // Anthropic already rejected, so the row stays unselectable until
+              // the account is re-authenticated from the Accounts pane.
+              const needsSignIn =
+                isUnavailableUsage(inactiveUsage?.rateLimits) &&
+                usageFailureNeedsSignIn(inactiveUsage?.rateLimits)
 
               return (
                 <DropdownMenuItem
                   key={`${selectedGroup.key}:${target.id ?? 'system'}`}
-                  disabled={isSwitching || target.active}
+                  disabled={isSwitching || target.active || needsSignIn}
                   onSelect={(event) => {
                     event.preventDefault()
                     if (!target.active) {
