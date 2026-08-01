@@ -17,6 +17,21 @@ describe('classifyClaudeOAuthUsageError', () => {
     })
   })
 
+  it('treats auth rejections of a long-lived token as usage-unavailable, not re-auth', () => {
+    for (const status of [401, 403]) {
+      expect(
+        classifyClaudeOAuthUsageError(new OAuthUsageError('Invalid OAuth token', status, true), {
+          longLivedToken: true
+        })
+      ).toMatchObject({
+        failureKind: 'usage-unavailable',
+        shouldAttemptDelegatedRefresh: false,
+        shouldAttemptCliFallback: true,
+        terminal: false
+      })
+    }
+  })
+
   it('keeps usage rate limits terminal', () => {
     expect(
       classifyClaudeOAuthUsageError(new OAuthUsageError('Claude usage is rate limited', 429, true))

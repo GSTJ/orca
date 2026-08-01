@@ -2,7 +2,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -2030,5 +2038,93 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
     )
     expect(deps.getSettings().claudeManagedAccounts).toHaveLength(0)
     expect(deps.runtimeAuth.forceMaterializeCurrentSelectionForRollback).toHaveBeenCalled()
+  })
+
+  it('registers a long-lived-token account without running a browser login', async () => {
+    const deps = makeDeps()
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      deps.store as never,
+      deps.rateLimits as never,
+      deps.runtimeAuth as never
+    )
+    const runClaudeCommand = vi.fn()
+    ;(service as unknown as { runClaudeCommand: () => Promise<string> }).runClaudeCommand =
+      runClaudeCommand
+
+    const result = await service.addAccountFromToken('  setup-token-1  ', ' Personal Max ')
+
+    const accounts = deps.getSettings().claudeManagedAccounts
+    expect(accounts).toHaveLength(1)
+    expect(accounts[0].authMethod).toBe('long-lived-token')
+    expect(accounts[0].email).toBe('')
+    expect(accounts[0].label).toBe('Personal Max')
+    expect(result.accounts[0]?.label).toBe('Personal Max')
+    // The token is stored in the standard credentials envelope so the existing
+    // managed storage and usage-fetch paths work unchanged.
+    expect(readFileSync(join(accounts[0].managedAuthPath, '.credentials.json'), 'utf-8')).toBe(
+      '{"claudeAiOauth":{"accessToken":"setup-token-1"}}'
+    )
+    expect(existsSync(join(accounts[0].managedAuthPath, 'oauth-account.json'))).toBe(false)
+    expect(runClaudeCommand).not.toHaveBeenCalled()
+    expect(deps.runtimeAuth.clearLastWrittenCredentialsJson).toHaveBeenCalledWith(accounts[0].id)
+    expect(deps.rateLimits.evictInactiveClaudeCache).toHaveBeenCalledWith(accounts[0].id)
+  })
+
+  it('stores the token account credential in the Keychain on macOS', async () => {
+    setPlatform('darwin')
+    const deps = makeDeps()
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      deps.store as never,
+      deps.rateLimits as never,
+      deps.runtimeAuth as never
+    )
+
+    await service.addAccountFromToken('setup-token-1', 'Personal Max')
+
+    const accounts = deps.getSettings().claudeManagedAccounts
+    expect(writeManagedClaudeKeychainCredentials).toHaveBeenCalledWith(
+      accounts[0].id,
+      '{"claudeAiOauth":{"accessToken":"setup-token-1"}}'
+    )
+    expect(existsSync(join(accounts[0].managedAuthPath, '.credentials.json'))).toBe(false)
+  })
+
+  it('rejects token pastes with embedded whitespace and cleans up the managed dir', async () => {
+    const deps = makeDeps()
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      deps.store as never,
+      deps.rateLimits as never,
+      deps.runtimeAuth as never
+    )
+
+    await expect(service.addAccountFromToken('setup token-1', 'Personal Max')).rejects.toThrow(
+      /Paste the token exactly/
+    )
+    await expect(service.addAccountFromToken('', 'Personal Max')).rejects.toThrow(
+      /Paste the token exactly/
+    )
+    await expect(service.addAccountFromToken('setup-token-1', '  ')).rejects.toThrow(
+      /label is required/
+    )
+    expect(deps.getSettings().claudeManagedAccounts).toHaveLength(0)
+    // Validation runs before the managed auth dir is created, so nothing to clean.
+    expect(existsSync(join(managedRoot, 'claude-accounts'))).toBe(false)
+  })
+
+  it('rejects re-authenticating a long-lived-token account', async () => {
+    const deps = makeDeps()
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      deps.store as never,
+      deps.rateLimits as never,
+      deps.runtimeAuth as never
+    )
+    await service.addAccountFromToken('setup-token-1', 'Personal Max')
+    const accountId = deps.getSettings().claudeManagedAccounts[0].id
+
+    await expect(service.reauthenticateAccount(accountId)).rejects.toThrow(/long-lived setup token/)
   })
 })

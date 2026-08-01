@@ -81,6 +81,20 @@ describe('AccountsPane', () => {
     }
   })
 
+  it('offers the setup-token add flow only for the local host runtime', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'))
+
+    expect(markup).toContain('Add Token')
+
+    // Why: a pasted token would land on this device, not the remote server that
+    // owns the accounts in remote scope.
+    const remoteMarkup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      activeRuntimeEnvironmentId: 'env-1'
+    })
+    expect(remoteMarkup).not.toContain('Add Token')
+  })
+
   it('keeps the runtime label inside the localized account copy', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 

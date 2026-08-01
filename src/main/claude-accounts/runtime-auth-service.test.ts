@@ -3928,4 +3928,83 @@ describe('ClaudeRuntimeAuthService', () => {
 
     expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(runtimeRotated)
   })
+
+  it('injects the token env patch for long-lived-token accounts without materializing', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const tokenEnvelope = JSON.stringify({ claudeAiOauth: { accessToken: 'setup-token-1' } })
+    const managedAuthPath = createManagedClaudeAuth(testState.userDataDir, 'token-1', tokenEnvelope)
+    // Token adds never capture oauth-account.json; drop the helper's default.
+    rmSync(join(managedAuthPath, 'oauth-account.json'), { force: true })
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('token-1', managedAuthPath, {
+          email: '',
+          label: 'Personal Max',
+          authMethod: 'long-lived-token'
+        })
+      ],
+      activeClaudeManagedAccountId: 'token-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch()
+
+    expect(preparation.envPatch.CLAUDE_CODE_OAUTH_TOKEN).toBe('setup-token-1')
+    expect(preparation.stripAuthEnv).toBe(true)
+    expect(preparation.provenance).toBe('managed:token-1')
+    // No materialization, no keychain writes, no proactive refresh for token accounts.
+    expect(existsSync(runtimeCredentialsPath)).toBe(false)
+    expect(testState.scopedKeychainCredentials).toBeNull()
+    expect(testState.legacyKeychainCredentials).toBeNull()
+    expect(refreshClaudeOauthCredentials).not.toHaveBeenCalled()
+    expect(store.getSettings().activeClaudeManagedAccountId).toBe('token-1')
+  })
+
+  it('restores the system default when switching from an oauth account to a token account', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const systemCredentials = createClaudeCredentialsJson('system@example.com', 'system')
+    writeFileSync(runtimeCredentialsPath, systemCredentials, 'utf-8')
+    testState.scopedKeychainCredentials = systemCredentials
+    testState.legacyKeychainCredentials = systemCredentials
+    const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
+    const oauthAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      managedCredentials
+    )
+    const tokenEnvelope = JSON.stringify({ claudeAiOauth: { accessToken: 'setup-token-1' } })
+    const tokenAuthPath = createManagedClaudeAuth(testState.userDataDir, 'token-1', tokenEnvelope)
+    rmSync(join(tokenAuthPath, 'oauth-account.json'), { force: true })
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', oauthAuthPath),
+        createClaudeAccount('token-1', tokenAuthPath, {
+          email: '',
+          label: 'Personal Max',
+          authMethod: 'long-lived-token'
+        })
+      ],
+      activeClaudeManagedAccountId: null
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    // Activate the oauth account from the system default so its snapshot exists.
+    store.updateSettings({ activeClaudeManagedAccountId: 'account-1' })
+    await service.syncForCurrentSelection()
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
+
+    store.updateSettings({ activeClaudeManagedAccountId: 'token-1' })
+    await service.syncForCurrentSelection()
+
+    // The token account leaves ~/.claude as the system default; its own credential
+    // travels only through the launch env.
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(systemCredentials)
+    expect(store.getSettings().activeClaudeManagedAccountId).toBe('token-1')
+    const preparation = await service.prepareForRateLimitFetch()
+    expect(preparation.envPatch.CLAUDE_CODE_OAUTH_TOKEN).toBe('setup-token-1')
+  })
 })

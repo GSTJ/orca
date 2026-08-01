@@ -178,6 +178,76 @@ describe('fetchClaudeRateLimits', () => {
     )
   })
 
+  it('uses the long-lived token from the env patch without reading stored credentials', async () => {
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir: '/Users/test/.claude',
+      envPatch: { CLAUDE_CODE_OAUTH_TOKEN: 'setup-token-1' },
+      stripAuthEnv: true,
+      provenance: 'managed:token-account'
+    }
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 },
+      weekly: { usedPercent: 34 },
+      usageMetadata: { source: 'oauth', credentialSource: 'long-lived-token' }
+    })
+
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer setup-token-1' })
+      })
+    )
+    // Why: ~/.claude and the Keychain belong to other accounts for token launches.
+    expect(readActiveClaudeKeychainCredentialsStrict).not.toHaveBeenCalled()
+    expect(readActiveClaudeKeychainCredentials).not.toHaveBeenCalled()
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('reports usage-unavailable instead of stale-token when a long-lived token is rejected', async () => {
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir: '/Users/test/.claude',
+      envPatch: { CLAUDE_CODE_OAUTH_TOKEN: 'setup-token-1' },
+      stripAuthEnv: true,
+      provenance: 'managed:token-account'
+    }
+    netFetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: 'Invalid authentication credentials' } }), {
+        status: 401
+      })
+    )
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      usageMetadata: { failureKind: 'usage-unavailable', attemptedSources: ['oauth'] }
+    })
+  })
+
+  it('falls back to the usage PTY when a long-lived token is rejected by the usage endpoint', async () => {
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir: '/Users/test/.claude',
+      envPatch: { CLAUDE_CODE_OAUTH_TOKEN: 'setup-token-1' },
+      stripAuthEnv: true,
+      provenance: 'managed:token-account'
+    }
+    netFetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: 'Forbidden' } }), { status: 403 })
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 56 },
+      usageMetadata: { source: 'cli', attemptedSources: ['oauth', 'cli'] }
+    })
+    expect(fetchViaPty).toHaveBeenCalledWith(expect.objectContaining({ authPreparation }))
+  })
+
   it('falls back to the legacy keychain token when the scoped token is rejected as stale', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
