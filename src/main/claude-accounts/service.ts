@@ -128,7 +128,7 @@ export class ClaudeAccountService {
   /**
    * Adds a managed Claude account backed by a long-lived `claude setup-token`.
    * The token is the whole credential: no browser login, no refresh token, no
-   * materialization into ~/.claude — sessions receive it via
+   * materialization into ~/.claude. Sessions receive it via
    * CLAUDE_CODE_OAUTH_TOKEN (issue #12002).
    */
   async addAccountFromToken(token: string, label: string): Promise<ClaudeRateLimitAccountsState> {
@@ -213,7 +213,7 @@ export class ClaudeAccountService {
     label: string
   ): Promise<ClaudeRateLimitAccountsState> {
     const trimmedToken = token.trim()
-    // Why: no strict prefix gate — the token format is not a documented contract.
+    // Why: no strict prefix gate, the token format is not a documented contract.
     if (!trimmedToken || /\s/.test(trimmedToken)) {
       throw new Error('Paste the token exactly as `claude setup-token` printed it.')
     }

@@ -17,7 +17,7 @@ export function classifyClaudeOAuthUsageError(
       return terminal('rate-limited')
     }
     // Why: a setup token has no refresh path, and it may simply lack the usage
-    // endpoint's scopes while sessions still work — degraded usage, not re-auth.
+    // endpoint's scopes while sessions still work. Degrade usage, never re-auth.
     if (options?.longLivedToken && (error.status === 401 || error.status === 403)) {
       return fallbackOnly('usage-unavailable')
     }

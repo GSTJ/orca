@@ -345,7 +345,7 @@ export class ClaudeRuntimeAuthService {
 
     if (activeAccount.authMethod === 'long-lived-token') {
       // Why: token accounts authenticate purely through CLAUDE_CODE_OAUTH_TOKEN in
-      // the launch env — no materialization into ~/.claude, no refresh, no read-back.
+      // the launch env: no materialization into ~/.claude, no refresh, no read-back.
       // Leave the runtime dir exactly as the system-default path would.
       if (this.lastSyncedAccountId !== null) {
         await (previousAccount
