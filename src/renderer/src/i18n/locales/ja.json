@@ -5226,7 +5226,16 @@
           "codexSystemDefaultNeedsSignIn": "{{value0}} の Codex サインインが見つかりません。",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "addClaudeToken": "トークンを追加",
+          "claudeTokenBadge": "セットアップトークン",
+          "claudeTokenDialogTitle": "セットアップトークンでアカウントを追加",
+          "claudeTokenDialogDescription": "ターミナルで claude setup-token を実行し、トークンをここに貼り付けてください。約1年間有効なため、このアカウントでは毎日の再ログインが不要になります。",
+          "claudeTokenField": "トークン",
+          "claudeTokenPlaceholder": "claude setup-token のトークンを貼り付け",
+          "claudeTokenLabelField": "ラベル",
+          "claudeTokenLabelPlaceholder": "例: Personal Max",
+          "claudeTokenLabelHint": "セットアップトークンにはメールアドレスが含まれないため、この名前が Orca 内でアカウントを識別します。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "再起動",

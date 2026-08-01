@@ -5286,7 +5286,16 @@
           "codexSystemDefaultNeedsSignIn": "No Codex sign-in was found for {{value0}}.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "addClaudeToken": "Add Token",
+          "claudeTokenBadge": "Setup token",
+          "claudeTokenDialogTitle": "Add Account with Setup Token",
+          "claudeTokenDialogDescription": "Run claude setup-token in a terminal and paste the token here. It stays valid for about a year, so this account never asks for a daily re-login.",
+          "claudeTokenField": "Token",
+          "claudeTokenPlaceholder": "Paste the token from claude setup-token",
+          "claudeTokenLabelField": "Label",
+          "claudeTokenLabelPlaceholder": "e.g. Personal Max",
+          "claudeTokenLabelHint": "Setup tokens carry no email, so this name identifies the account in Orca."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",

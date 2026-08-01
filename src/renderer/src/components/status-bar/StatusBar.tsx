@@ -464,7 +464,8 @@ export function buildClaudeStatusSwitchGroups(
         },
         ...accountsForTarget.map((account) => ({
           id: account.id,
-          label: account.email,
+          // Why: token accounts have no captured email, only the user's label.
+          label: account.label?.trim() || account.email,
           active: account.id === activeId,
           runtimeTarget: target
         }))
@@ -519,6 +520,7 @@ function getClaudeStatusAccountsFromSettings(
       .map((account) => ({
         id: account.id,
         email: account.email,
+        label: account.label ?? null,
         managedAuthRuntime: account.managedAuthRuntime ?? 'host',
         wslDistro: account.wslDistro ?? null,
         authMethod: account.authMethod ?? 'unknown',
