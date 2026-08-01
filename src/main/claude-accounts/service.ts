@@ -125,6 +125,16 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.doAddAccountFromConfigDir(configDir, options))
   }
 
+  /**
+   * Adds a managed Claude account backed by a long-lived `claude setup-token`.
+   * The token is the whole credential: no browser login, no refresh token, no
+   * materialization into ~/.claude — sessions receive it via
+   * CLAUDE_CODE_OAUTH_TOKEN (issue #12002).
+   */
+  async addAccountFromToken(token: string, label: string): Promise<ClaudeRateLimitAccountsState> {
+    return this.serializeMutation(() => this.doAddAccountFromToken(token, label))
+  }
+
   async reauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     return this.serializeMutation(() => this.doReauthenticateAccount(accountId))
   }
@@ -192,6 +202,63 @@ export class ClaudeAccountService {
         previousSettings,
         captured
       )
+    } catch (error) {
+      await this.cleanupFailedAdd(accountId, managedAuth.managedAuthPath, previousSettings, error)
+      throw error
+    }
+  }
+
+  private async doAddAccountFromToken(
+    token: string,
+    label: string
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const trimmedToken = token.trim()
+    // Why: no strict prefix gate — the token format is not a documented contract.
+    if (!trimmedToken || /\s/.test(trimmedToken)) {
+      throw new Error('Paste the token exactly as `claude setup-token` printed it.')
+    }
+    const trimmedLabel = label.trim()
+    if (!trimmedLabel) {
+      throw new Error('A label is required so the account can be told apart later.')
+    }
+    const accountId = randomUUID()
+    // Why: setup tokens are host-runtime only for now; the env var never reaches
+    // wsl.exe-wrapped spawns, which export their env inside the bash command.
+    const managedAuth = this.createManagedAuthDir(accountId)
+    const previousSettings = this.store.getSettings()
+    try {
+      // Why: store the token in the standard credentials envelope so the existing
+      // managed storage (Keychain on macOS, 0600 file elsewhere), snapshot, and
+      // usage-fetch paths all work unchanged. No refreshToken/expiresAt: nothing rotates.
+      const credentialsJson = JSON.stringify({ claudeAiOauth: { accessToken: trimmedToken } })
+      await this.writeManagedCredentials(accountId, managedAuth.managedAuthPath, credentialsJson)
+
+      const now = Date.now()
+      const account: ClaudeManagedAccount = {
+        id: accountId,
+        email: '',
+        label: trimmedLabel,
+        managedAuthPath: managedAuth.managedAuthPath,
+        managedAuthRuntime: managedAuth.managedAuthRuntime,
+        wslDistro: managedAuth.wslDistro,
+        wslLinuxAuthPath: managedAuth.wslLinuxAuthPath,
+        authMethod: 'long-lived-token',
+        organizationUuid: null,
+        organizationName: null,
+        createdAt: now,
+        updatedAt: now,
+        lastAuthenticatedAt: now
+      }
+
+      const selection = normalizeClaudeRuntimeSelection(previousSettings)
+      this.store.updateSettings({
+        claudeManagedAccounts: [...previousSettings.claudeManagedAccounts, account],
+        activeClaudeManagedAccountId: selection.host,
+        activeClaudeManagedAccountIdsByRuntime: selection
+      })
+      this.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
+      this.rateLimits.evictInactiveClaudeCache(accountId)
+      return this.getSnapshot()
     } catch (error) {
       await this.cleanupFailedAdd(accountId, managedAuth.managedAuthPath, previousSettings, error)
       throw error
@@ -328,6 +395,13 @@ export class ClaudeAccountService {
 
   private async doReauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
+    // Why: a browser login would capture rotating OAuth credentials and silently
+    // change the account's auth method; replace token accounts instead.
+    if (account.authMethod === 'long-lived-token') {
+      throw new Error(
+        'This account uses a long-lived setup token. Remove it and add a new token instead.'
+      )
+    }
     const managedAuthPath = this.assertManagedAuthPath(account.managedAuthPath, accountId)
     const previousSettings = this.store.getSettings()
     const previousManagedAuth = await this.readManagedAuthSnapshot(accountId, managedAuthPath)
@@ -511,6 +585,7 @@ export class ClaudeAccountService {
     return {
       id: account.id,
       email: account.email,
+      label: account.label ?? null,
       managedAuthRuntime: account.managedAuthRuntime ?? 'host',
       wslDistro: account.wslDistro ?? null,
       authMethod: account.authMethod ?? 'unknown',

@@ -8,10 +8,18 @@ export type ClaudeUsageErrorClassification = {
   terminal: boolean
 }
 
-export function classifyClaudeOAuthUsageError(error: unknown): ClaudeUsageErrorClassification {
+export function classifyClaudeOAuthUsageError(
+  error: unknown,
+  options?: { longLivedToken?: boolean }
+): ClaudeUsageErrorClassification {
   if (error instanceof OAuthUsageError) {
     if (error.status === 429) {
       return terminal('rate-limited')
+    }
+    // Why: a setup token has no refresh path, and it may simply lack the usage
+    // endpoint's scopes while sessions still work — degraded usage, not re-auth.
+    if (options?.longLivedToken && (error.status === 401 || error.status === 403)) {
+      return fallbackOnly('usage-unavailable')
     }
     if (error.status === 401) {
       return recoverableAuth('stale-token')

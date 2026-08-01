@@ -2502,11 +2502,14 @@ export type CodexManagedAccountRuntimeSelection = {
 export type ClaudeManagedAccount = {
   id: string
   email: string
+  /** User-provided display name for accounts without a captured identity
+   *  (long-lived setup-token accounts have no oauth-account.json). */
+  label?: string | null
   managedAuthPath: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   wslLinuxAuthPath?: string | null
-  authMethod: 'subscription-oauth' | 'unknown'
+  authMethod: 'subscription-oauth' | 'long-lived-token' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number
@@ -2517,9 +2520,10 @@ export type ClaudeManagedAccount = {
 export type ClaudeManagedAccountSummary = {
   id: string
   email: string
+  label?: string | null
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
-  authMethod: 'subscription-oauth' | 'unknown'
+  authMethod: 'subscription-oauth' | 'long-lived-token' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number

@@ -115,7 +115,7 @@ export class ClaudeRuntimeAuthService {
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
     await this.syncForCurrentSelection(effectiveTarget)
-    return this.getPreparation(effectiveTarget)
+    return await this.getPreparation(effectiveTarget)
   }
 
   async prepareForRateLimitFetch(
@@ -123,7 +123,7 @@ export class ClaudeRuntimeAuthService {
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
     await this.syncForCurrentSelection(effectiveTarget)
-    return this.getPreparation(effectiveTarget)
+    return await this.getPreparation(effectiveTarget)
   }
 
   async syncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
@@ -340,6 +340,22 @@ export class ClaudeRuntimeAuthService {
       }
       this.store.updateSettings({ activeClaudeManagedAccountId: null })
       this.lastSyncedAccountId = null
+      return
+    }
+
+    if (activeAccount.authMethod === 'long-lived-token') {
+      // Why: token accounts authenticate purely through CLAUDE_CODE_OAUTH_TOKEN in
+      // the launch env — no materialization into ~/.claude, no refresh, no read-back.
+      // Leave the runtime dir exactly as the system-default path would.
+      if (this.lastSyncedAccountId !== null) {
+        await (previousAccount
+          ? this.restoreSystemDefaultSnapshot(
+              previousManagedCredentialsJson,
+              previousManagedOauthAccount
+            )
+          : this.restoreSystemDefaultSnapshot(this.lastWrittenCredentialsJson, undefined))
+        this.lastSyncedAccountId = null
+      }
       return
     }
 
@@ -601,7 +617,9 @@ export class ClaudeRuntimeAuthService {
     return candidates
   }
 
-  private getPreparation(target?: ClaudeAccountSelectionTarget): ClaudeRuntimeAuthPreparation {
+  private async getPreparation(
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<ClaudeRuntimeAuthPreparation> {
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
     const normalizedTarget = this.resolveWslDefaultTarget(
@@ -652,12 +670,20 @@ export class ClaudeRuntimeAuthService {
         provenance: `wsl:${normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro ?? '__default__'}:system`
       }
     }
+    // Why: the token account's credential travels in the env patch; nothing was
+    // materialized into ~/.claude for it during sync.
+    const longLivedToken =
+      activeAccount?.authMethod === 'long-lived-token'
+        ? this.readAccessTokenFromCredentials(await this.readManagedCredentials(activeAccount))
+        : null
     return {
       configDir: paths.configDir,
       runtime: 'host',
       wslDistro: null,
       wslLinuxConfigDir: null,
-      envPatch: paths.envPatch,
+      envPatch: longLivedToken
+        ? { ...paths.envPatch, CLAUDE_CODE_OAUTH_TOKEN: longLivedToken }
+        : paths.envPatch,
       stripAuthEnv: Boolean(activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'),
       managedRefreshDeferredByLivePty: Boolean(
         activeAccountId &&
@@ -709,6 +735,12 @@ export class ClaudeRuntimeAuthService {
     const matches: { account: ClaudeManagedAccount; managedCredentialsJson: string }[] = []
     let unverifiableCount = 0
     for (const account of this.store.getSettings().claudeManagedAccounts) {
+      // Why: token accounts never materialize into the shared runtime dir, so they
+      // can't be the source of runtime credentials; matching against their
+      // identity-less envelope would only poison read-back as "ambiguous".
+      if (account.authMethod === 'long-lived-token') {
+        continue
+      }
       const managedCredentialsJson = await this.readManagedCredentials(account)
       if (!managedCredentialsJson) {
         continue
@@ -865,6 +897,19 @@ export class ClaudeRuntimeAuthService {
       organizationUuid: this.normalizeField(
         this.readString(oauth, 'organizationUuid') ?? this.readString(oauth, 'organizationId')
       )
+    }
+  }
+
+  private readAccessTokenFromCredentials(credentialsJson: string | null): string | null {
+    if (!credentialsJson) {
+      return null
+    }
+    try {
+      const parsed = this.asRecord(JSON.parse(credentialsJson))
+      const oauth = this.asRecord(parsed?.claudeAiOauth)
+      return this.normalizeField(this.readString(oauth, 'accessToken'))
+    } catch {
+      return null
     }
   }
 

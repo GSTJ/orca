@@ -2063,6 +2063,8 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:add', args),
+    addFromToken: (args: { token: string; label: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:addFromToken', args),
     cancelPendingLogin: (): Promise<boolean> =>
       ipcRenderer.invoke('claudeAccounts:cancelPendingLogin'),
     reauthenticate: (args: { accountId: string }): Promise<unknown> =>

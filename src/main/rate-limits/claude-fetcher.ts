@@ -85,7 +85,12 @@ type OAuthCredentialReadOptions = {
   keychainConfigDir?: string
 }
 
-type OAuthCredentialSource = 'scoped-keychain' | 'legacy-keychain' | 'credentials-file' | 'none'
+type OAuthCredentialSource =
+  | 'scoped-keychain'
+  | 'legacy-keychain'
+  | 'credentials-file'
+  | 'long-lived-token'
+  | 'none'
 
 function parseOAuthCredentialsJson(
   raw: string,
@@ -772,9 +777,12 @@ export async function fetchClaudeRateLimits(
     )
   }
 
-  const oauthCredentials = await readOAuthCredentials(
-    resolveOAuthCredentialReadOptions(options?.authPreparation)
-  )
+  // Why: long-lived-token accounts carry their whole credential in the env patch;
+  // ~/.claude and the Keychain belong to other accounts and must not be read.
+  const longLivedToken = options?.authPreparation?.envPatch.CLAUDE_CODE_OAUTH_TOKEN?.trim() || null
+  const oauthCredentials: OAuthCredentialReadResult = longLivedToken
+    ? { token: longLivedToken, hasRefreshableCredentials: false, source: 'long-lived-token' }
+    : await readOAuthCredentials(resolveOAuthCredentialReadOptions(options?.authPreparation))
   if (options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
@@ -789,7 +797,9 @@ export async function fetchClaudeRateLimits(
       return await completeOAuthUsageSuccess({ oauthLimits, oauthCredentials, attempts, options })
     } catch (err) {
       warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, err)
-      const classification = classifyClaudeOAuthUsageError(err)
+      const classification = classifyClaudeOAuthUsageError(err, {
+        longLivedToken: Boolean(longLivedToken)
+      })
 
       if (
         canRetryWithLegacyKeychainToken({

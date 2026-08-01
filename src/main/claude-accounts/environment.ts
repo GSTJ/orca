@@ -8,6 +8,16 @@ export const CLAUDE_AUTH_ENV_VARS = [
 export type ClaudeEnvPatch = {
   CLAUDE_CONFIG_DIR?: string
   ANTHROPIC_CUSTOM_HEADERS?: string
+  /** Set for long-lived-token managed accounts: their credential is the env var
+   *  itself, applied after stripAuthEnv removes ambient auth. */
+  CLAUDE_CODE_OAUTH_TOKEN?: string
+}
+
+/** Auth env keys to delete for a launch, minus any the patch itself sets. */
+export function claudeAuthEnvVarsToStrip(patch: ClaudeEnvPatch): string[] {
+  return [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS'].filter(
+    (key) => patch[key as keyof ClaudeEnvPatch] === undefined
+  )
 }
 
 export function applyClaudeEnvPatch(
@@ -29,6 +39,9 @@ export function applyClaudeEnvPatch(
   }
   if (patch.ANTHROPIC_CUSTOM_HEADERS !== undefined) {
     baseEnv.ANTHROPIC_CUSTOM_HEADERS = patch.ANTHROPIC_CUSTOM_HEADERS
+  }
+  if (patch.CLAUDE_CODE_OAUTH_TOKEN !== undefined) {
+    baseEnv.CLAUDE_CODE_OAUTH_TOKEN = patch.CLAUDE_CODE_OAUTH_TOKEN
   }
 
   return baseEnv
