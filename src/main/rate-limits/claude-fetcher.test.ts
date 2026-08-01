@@ -1354,6 +1354,40 @@ describe('fetchClaudeRateLimits', () => {
     expect(readFileMock).not.toHaveBeenCalled()
   })
 
+  it('fetches inactive token-account usage from its envelope without a refresh attempt', async () => {
+    setPlatform('linux')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'token-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'token-1\n', 'utf-8')
+    // A setup-token envelope has no refreshToken/expiresAt; the refresh attempt
+    // must no-op instead of erroring or rewriting the file.
+    writeFileSync(
+      join(ownedAuthPath, '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { accessToken: 'setup-token-1' } }),
+      'utf-8'
+    )
+
+    await expect(
+      fetchManagedAccountUsage({ id: 'token-1', managedAuthPath: ownedAuthPath })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 },
+      weekly: { usedPercent: 34 }
+    })
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer setup-token-1' })
+      })
+    )
+    expect(readFileSync(join(ownedAuthPath, '.credentials.json'), 'utf-8')).toBe(
+      JSON.stringify({ claudeAiOauth: { accessToken: 'setup-token-1' } })
+    )
+  })
+
   it('supplements inactive managed account OAuth usage with Fable from its usage panel', async () => {
     setPlatform('linux')
     tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
