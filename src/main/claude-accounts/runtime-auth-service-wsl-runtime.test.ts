@@ -84,6 +84,55 @@ describe('ClaudeRuntimeAuthService', () => {
     })
   })
 
+  it('injects a setup token into WSL without using the managed auth directory', async () => {
+    setPlatform('win32')
+    const wslHome = '\\\\wsl.localhost\\Ubuntu\\home\\alice'
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome,
+      toWindowsWslPath: (value: string) => value
+    }))
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'setup-account',
+      createClaudeCredentialsJson('unused@example.com', 'unused')
+    )
+    writeFileSync(join(managedAuthPath, '.setup-token'), 'setup-token-secret', 'utf-8')
+    const settings = createSettings({
+      localAccountRuntime: 'wsl',
+      localAccountWslDistro: 'Ubuntu',
+      claudeManagedAccounts: [
+        createClaudeAccount('setup-account', managedAuthPath, {
+          email: '',
+          label: 'Work Claude',
+          authMethod: 'setup-token',
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu'
+        })
+      ],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: {
+        host: null,
+        wsl: { Ubuntu: 'setup-account' }
+      }
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch()
+
+    expect(preparation).toMatchObject({
+      configDir: join(wslHome, '.claude'),
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      wslLinuxConfigDir: '/home/alice/.claude',
+      envPatch: { CLAUDE_CODE_OAUTH_TOKEN: 'setup-token-secret' },
+      provenance: 'managed:setup-account:setup-token:wsl:Ubuntu',
+      stripAuthEnv: true
+    })
+  })
+
   it('uses the global WSL runtime for untargeted Claude preparation under auto', async () => {
     setPlatform('win32')
     vi.doMock('../wsl', () => ({

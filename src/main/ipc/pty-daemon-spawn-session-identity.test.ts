@@ -332,6 +332,12 @@ describe('registerPtyHandlers', () => {
         )
       })
       it('does NOT inject host-local env on SSH spawns (connectionId set)', async () => {
+        const prepareClaudeAuth = vi.fn(async () => ({
+          configDir: '/tmp/claude',
+          envPatch: { CLAUDE_CODE_OAUTH_TOKEN: 'host-setup-token' },
+          stripAuthEnv: true,
+          provenance: 'managed:setup-account:setup-token'
+        }))
         const sshSpawn = vi.fn(
           async (_opts: {
             env: Record<string, string>
@@ -378,7 +384,7 @@ describe('registerPtyHandlers', () => {
             httpProxyBypassRules: 'localhost',
             codexSystemDefaultRealHomeEnabled: true
           })) as never,
-          undefined,
+          prepareClaudeAuth,
           store as never
         )
         const leafId = '11111111-1111-4111-8111-111111111111'
@@ -389,7 +395,8 @@ describe('registerPtyHandlers', () => {
           connectionId: 'ssh-1',
           worktreeId: 'wt-1',
           tabId: 'tab-1',
-          leafId
+          leafId,
+          command: 'claude'
         })
         const spawnOptions = sshSpawn.mock.calls.at(-1)![0]
         const env = spawnOptions.env
@@ -406,6 +413,7 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
         expect(env.CODEX_HOME).toBeUndefined()
+        expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
         expect(env.HTTP_PROXY).toBeUndefined()
         expect(env.HTTPS_PROXY).toBeUndefined()
         expect(env.NO_PROXY).toBeUndefined()
@@ -418,6 +426,7 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.tabId).toBe('tab-1')
         expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
         expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+        expect(prepareClaudeAuth).not.toHaveBeenCalled()
         expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
           expect.objectContaining({
             targetId: 'ssh-1',

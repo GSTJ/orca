@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -132,6 +132,62 @@ describe('ClaudeAccountService credential capture', () => {
     expect(rateLimits.evictInactiveClaudeCache).toHaveBeenCalledWith(
       settings.claudeManagedAccounts[1].id
     )
+  })
+
+  it('stores a setup token outside settings without changing the active account', async () => {
+    setPlatform('linux')
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
+    rmSync(tempDir, { recursive: true, force: true })
+    let settings = {
+      claudeManagedAccounts: [] as Record<string, unknown>[],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      clearLastWrittenCredentialsJson: vi.fn(),
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+
+    const result = await service.addSetupTokenAccount({
+      label: ' Work Claude ',
+      token: 'setup-token-secret',
+      runtime: 'host'
+    })
+
+    const account = settings.claudeManagedAccounts[0]!
+    const tokenPath = join(String(account.managedAuthPath), '.setup-token')
+    expect(account).toMatchObject({
+      email: '',
+      label: 'Work Claude',
+      authMethod: 'setup-token'
+    })
+    expect(result.accounts[0]).toMatchObject({
+      label: 'Work Claude',
+      authMethod: 'setup-token'
+    })
+    expect(readFileSync(tokenPath, 'utf-8')).toBe('setup-token-secret')
+    expect(statSync(tokenPath).mode & 0o777).toBe(0o600)
+    expect(JSON.stringify(settings)).not.toContain('setup-token-secret')
+    expect(settings.activeClaudeManagedAccountId).toBeNull()
+    expect(runtimeAuth.syncForCurrentSelection).not.toHaveBeenCalled()
   })
 
   it('reports the original add failure and still removes managed auth when rollback rematerialization fails', async () => {

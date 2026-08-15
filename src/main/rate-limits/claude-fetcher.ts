@@ -753,6 +753,13 @@ export async function fetchClaudeRateLimits(
   if (options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+  if (options?.authPreparation?.envPatch.CLAUDE_CODE_OAUTH_TOKEN) {
+    return makeClaudeUsageResult('unavailable', 'Usage unavailable for setup-token accounts', {
+      attemptedSources: [],
+      failureKind: 'usage-unavailable',
+      authProvenance: options.authPreparation.provenance
+    })
+  }
   const attempts: ClaudeUsageAttemptState = { attemptedSources: [] }
   const allowCliFallback = options?.allowPtyFallback !== false
   const plan = resolveClaudeUsageRefreshPlan({
@@ -967,6 +974,7 @@ function describeError(error: unknown): string {
 
 export type InactiveClaudeAccountInfo = {
   id: string
+  authMethod?: 'subscription-oauth' | 'setup-token' | 'unknown'
   managedAuthPath: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
@@ -1182,6 +1190,13 @@ export async function fetchManagedAccountUsage(
 ): Promise<ProviderRateLimits> {
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
+  }
+  if (account.authMethod === 'setup-token') {
+    return makeClaudeUsageResult('unavailable', 'Usage unavailable for setup-token accounts', {
+      attemptedSources: [],
+      failureKind: 'usage-unavailable',
+      authProvenance: `managed:${account.id}:setup-token:inactive-preview`
+    })
   }
   const location = resolveManagedCredentialsLocation(account)
   let credentialsJson = location ? await readManagedCredentialsJson(location) : null

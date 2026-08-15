@@ -58,7 +58,7 @@ export function resolveOwnedClaudeManagedAuthPath(
 
 export function readClaudeManagedAuthFile(
   managedAuthPath: string,
-  filename: '.credentials.json' | 'oauth-account.json'
+  filename: '.credentials.json' | 'oauth-account.json' | '.setup-token'
 ): string | null {
   const filePath = resolve(managedAuthPath, filename)
   try {
@@ -73,7 +73,7 @@ export function readClaudeManagedAuthFile(
 
 export function writeClaudeManagedAuthFile(
   managedAuthPath: string,
-  filename: '.credentials.json' | 'oauth-account.json',
+  filename: '.credentials.json' | 'oauth-account.json' | '.setup-token',
   contents: string
 ): void {
   const filePath = resolve(managedAuthPath, filename)

@@ -157,7 +157,10 @@ export class ClaudeRuntimeAuthService {
 
   private initializeLastSyncedState(): void {
     const settings = this.store.getSettings()
-    this.lastSyncedAccountId = getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' })
+    const selectedAccountId = getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' })
+    const selectedAccount = this.getActiveAccount(settings.claudeManagedAccounts, selectedAccountId)
+    this.lastSyncedAccountId =
+      selectedAccount?.authMethod === 'setup-token' ? null : selectedAccountId
   }
 
   private async safeSyncForCurrentSelection(): Promise<void> {
@@ -252,6 +255,51 @@ export class ClaudeRuntimeAuthService {
           : this.restoreSystemDefaultSnapshot(this.lastWrittenCredentialsJson, undefined))
         this.lastSyncedAccountId = null
       }
+      return
+    }
+
+    if (activeAccount.authMethod === 'setup-token') {
+      const setupToken = await this.readManagedSetupToken(activeAccount)
+      if (!setupToken) {
+        console.warn(
+          '[claude-runtime-auth] Active setup-token account is missing its token, restoring system default'
+        )
+        if (
+          normalizedTarget.runtime === 'host' &&
+          previousAccount?.authMethod !== 'setup-token' &&
+          this.lastSyncedAccountId !== null
+        ) {
+          await this.restoreSystemDefaultSnapshot(
+            previousManagedCredentialsJson,
+            previousManagedOauthAccount
+          )
+        }
+        const nextSelection = setSelectedClaudeAccountIdForTarget(
+          normalizeClaudeRuntimeSelection(settings),
+          null,
+          normalizedTarget
+        )
+        this.store.updateSettings({
+          activeClaudeManagedAccountId:
+            normalizedTarget.runtime === 'host' ? null : settings.activeClaudeManagedAccountId,
+          activeClaudeManagedAccountIdsByRuntime: nextSelection
+        })
+        this.lastSyncedAccountId = null
+        this.clearLastWrittenRuntimeState()
+        return
+      }
+      if (
+        normalizedTarget.runtime === 'host' &&
+        previousAccount?.authMethod !== 'setup-token' &&
+        this.lastSyncedAccountId !== null
+      ) {
+        await this.restoreSystemDefaultSnapshot(
+          previousManagedCredentialsJson,
+          previousManagedOauthAccount
+        )
+      }
+      this.lastSyncedAccountId = null
+      this.clearLastWrittenRuntimeState()
       return
     }
 
@@ -601,7 +649,9 @@ export class ClaudeRuntimeAuthService {
     return candidates
   }
 
-  private getPreparation(target?: ClaudeAccountSelectionTarget): ClaudeRuntimeAuthPreparation {
+  private async getPreparation(
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<ClaudeRuntimeAuthPreparation> {
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
     const normalizedTarget = this.resolveWslDefaultTarget(
@@ -609,6 +659,38 @@ export class ClaudeRuntimeAuthService {
     )
     const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
     const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
+    if (activeAccount?.authMethod === 'setup-token') {
+      const setupToken = await this.readManagedSetupToken(activeAccount)
+      if (!setupToken) {
+        throw new Error('The selected Claude setup token is unavailable.')
+      }
+      if (normalizeClaudeAccountSelectionTarget(normalizedTarget).runtime === 'wsl') {
+        const distro =
+          normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro ?? getDefaultWslDistro()
+        const wslHome = distro ? getWslHome(distro) : null
+        const wslHomeInfo = wslHome ? parseWslUncPath(wslHome) : null
+        return {
+          configDir: wslHome ? join(wslHome, '.claude') : paths.configDir,
+          runtime: 'wsl',
+          wslDistro: distro,
+          wslLinuxConfigDir: wslHomeInfo
+            ? `${wslHomeInfo.linuxPath.replace(/\/$/, '')}/.claude`
+            : null,
+          envPatch: { CLAUDE_CODE_OAUTH_TOKEN: setupToken },
+          stripAuthEnv: true,
+          provenance: `managed:${activeAccount.id}:setup-token:wsl:${distro ?? ''}`
+        }
+      }
+      return {
+        configDir: paths.configDir,
+        runtime: 'host',
+        wslDistro: null,
+        wslLinuxConfigDir: null,
+        envPatch: { ...paths.envPatch, CLAUDE_CODE_OAUTH_TOKEN: setupToken },
+        stripAuthEnv: true,
+        provenance: `managed:${activeAccount.id}:setup-token`
+      }
+    }
     if (
       normalizeClaudeAccountSelectionTarget(normalizedTarget).runtime === 'wsl' &&
       activeAccount?.managedAuthRuntime === 'wsl' &&
@@ -1016,6 +1098,19 @@ export class ClaudeRuntimeAuthService {
       return readManagedClaudeKeychainCredentials(account.id)
     }
     return readClaudeManagedAuthFile(managedAuthPath, '.credentials.json')
+  }
+
+  private async readManagedSetupToken(account: ClaudeManagedAccount): Promise<string | null> {
+    const managedAuthPath = this.getOwnedManagedAuthPath(account)
+    if (!managedAuthPath) {
+      return null
+    }
+    const raw =
+      process.platform === 'darwin'
+        ? await readManagedClaudeKeychainCredentials(account.id)
+        : readClaudeManagedAuthFile(managedAuthPath, '.setup-token')
+    const token = raw?.trim() ?? ''
+    return token && token.length <= 16_384 && !/[\r\n]/.test(token) ? token : null
   }
 
   private async writeManagedCredentials(

@@ -777,6 +777,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         // Why: non-default env vars need WSLENV import to cross Windows wsl.exe into the Linux side.
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
       }
+      if (env.CLAUDE_CODE_OAUTH_TOKEN) {
+        addWslEnvKeys(env, ['CLAUDE_CODE_OAUTH_TOKEN'])
+      }
       if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
         // Why: wsl.exe drops custom Windows env vars unless named in WSLENV.
         addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])

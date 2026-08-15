@@ -454,7 +454,10 @@ describe('LocalPtyProvider', () => {
           cols: 80,
           rows: 24,
           cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
-          env: { ORCA_HERMES_STARTUP_QUERY: 'line one\nline two' }
+          env: {
+            CLAUDE_CODE_OAUTH_TOKEN: 'setup-token-secret',
+            ORCA_HERMES_STARTUP_QUERY: 'line one\nline two'
+          }
         })
       } finally {
         if (savedCodexHome === undefined) {
@@ -474,6 +477,7 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
       expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
         expect.arrayContaining([
+          'CLAUDE_CODE_OAUTH_TOKEN',
           'ORCA_TERMINAL_HANDLE/u',
           'ORCA_HERMES_STARTUP_QUERY',
           POWERLEVEL10K_WIZARD_DISABLE_ENV

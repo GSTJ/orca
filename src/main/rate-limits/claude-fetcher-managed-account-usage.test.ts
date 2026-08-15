@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fetchManagedAccountUsage } from './claude-fetcher'
+import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import {
   primeClaudeFetcherMocks,
   restorePlatform,
@@ -77,6 +77,37 @@ describe('fetchClaudeRateLimits', () => {
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
+  })
+
+  it('reports setup-token usage as unavailable without reading other Claude credentials', async () => {
+    const activeResult = await fetchClaudeRateLimits({
+      authPreparation: {
+        configDir: '/tmp/claude',
+        runtime: 'host',
+        wslDistro: null,
+        wslLinuxConfigDir: null,
+        envPatch: { CLAUDE_CODE_OAUTH_TOKEN: 'setup-token-secret' },
+        stripAuthEnv: true,
+        provenance: 'managed:setup-account:setup-token'
+      }
+    })
+    const inactiveResult = await fetchManagedAccountUsage({
+      id: 'setup-account',
+      authMethod: 'setup-token',
+      managedAuthPath: '/tmp/claude-accounts/setup-account/auth'
+    })
+
+    expect(activeResult).toMatchObject({
+      status: 'unavailable',
+      error: 'Usage unavailable for setup-token accounts'
+    })
+    expect(inactiveResult).toMatchObject({
+      status: 'unavailable',
+      error: 'Usage unavailable for setup-token accounts'
+    })
+    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
   it('does not read inactive managed credentials from unowned auth paths', async () => {

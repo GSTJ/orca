@@ -58,11 +58,12 @@ export type CodexManagedAccountRuntimeSelection = {
 export type ClaudeManagedAccount = {
   id: string
   email: string
+  label?: string
   managedAuthPath: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   wslLinuxAuthPath?: string | null
-  authMethod: 'subscription-oauth' | 'unknown'
+  authMethod: 'subscription-oauth' | 'setup-token' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number
@@ -73,9 +74,10 @@ export type ClaudeManagedAccount = {
 export type ClaudeManagedAccountSummary = {
   id: string
   email: string
+  label?: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
-  authMethod: 'subscription-oauth' | 'unknown'
+  authMethod: 'subscription-oauth' | 'setup-token' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number

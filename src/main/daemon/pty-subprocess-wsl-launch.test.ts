@@ -376,6 +376,7 @@ describe('createPtySubprocess', () => {
         rows: 24,
         cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
         env: {
+          CLAUDE_CODE_OAUTH_TOKEN: 'setup-token-secret',
           ORCA_TERMINAL_HANDLE: 'term_wsl',
           ORCA_HERMES_STARTUP_QUERY: 'line one\nline two',
           WSLENV: 'FOO/u'
@@ -405,6 +406,7 @@ describe('createPtySubprocess', () => {
     // test owns only the terminal handle and Powerlevel10k WSLENV contract.
     expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([
+        'CLAUDE_CODE_OAUTH_TOKEN',
         'FOO/u',
         'ORCA_TERMINAL_HANDLE/u',
         'ORCA_HERMES_STARTUP_QUERY',

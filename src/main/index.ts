@@ -2470,6 +2470,7 @@ void app.whenReady().then(async () => {
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
+        authMethod: account.authMethod,
         managedAuthPath: account.managedAuthPath,
         managedAuthRuntime: account.managedAuthRuntime,
         wslDistro: account.wslDistro,

@@ -40,6 +40,12 @@ export type ClaudeAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<ClaudeRateLimitAccountsState>
+  addSetupToken: (args: {
+    label: string
+    token: string
+    runtime?: 'host' | 'wsl'
+    wslDistro?: string | null
+  }) => Promise<ClaudeRateLimitAccountsState>
   cancelPendingLogin: () => Promise<boolean>
   reauthenticate: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
   remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>

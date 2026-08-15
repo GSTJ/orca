@@ -466,7 +466,7 @@ export function buildClaudeStatusSwitchGroups(
         },
         ...accountsForTarget.map((account) => ({
           id: account.id,
-          label: account.email,
+          label: account.label || account.email || 'Claude account',
           active: account.id === activeId,
           runtimeTarget: target
         }))
@@ -521,6 +521,7 @@ function getClaudeStatusAccountsFromSettings(
       .map((account) => ({
         id: account.id,
         email: account.email,
+        label: account.label,
         managedAuthRuntime: account.managedAuthRuntime ?? 'host',
         wslDistro: account.wslDistro ?? null,
         authMethod: account.authMethod ?? 'unknown',

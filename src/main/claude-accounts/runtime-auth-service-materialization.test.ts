@@ -80,6 +80,44 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(testState.runtimeWriteConfigDir).toBe(expectedRuntimeConfigDir())
   })
 
+  it('injects a setup token without materializing it into shared Claude auth', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const systemCredentials = createClaudeCredentialsJson('system@example.com', 'system')
+    writeFileSync(runtimeCredentialsPath, systemCredentials, 'utf-8')
+    testState.scopedKeychainCredentials = systemCredentials
+    testState.legacyKeychainCredentials = systemCredentials
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'setup-account',
+      createClaudeCredentialsJson('unused@example.com', 'unused')
+    )
+    testState.managedKeychainCredentials.set('setup-account', 'setup-token-secret')
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('setup-account', managedAuthPath, {
+          email: '',
+          label: 'Work Claude',
+          authMethod: 'setup-token'
+        })
+      ],
+      activeClaudeManagedAccountId: 'setup-account'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch()
+
+    expect(preparation).toMatchObject({
+      envPatch: { CLAUDE_CODE_OAUTH_TOKEN: 'setup-token-secret' },
+      provenance: 'managed:setup-account:setup-token',
+      stripAuthEnv: true
+    })
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(systemCredentials)
+    expect(testState.scopedKeychainCredentials).toBe(systemCredentials)
+    expect(testState.legacyKeychainCredentials).toBe(systemCredentials)
+  })
+
   it('restores system default instead of materializing corrupt managed credentials', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const systemCredentials = createClaudeCredentialsJson('system@example.com', 'system')

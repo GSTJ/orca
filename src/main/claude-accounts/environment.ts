@@ -7,6 +7,7 @@ export const CLAUDE_AUTH_ENV_VARS = [
 
 export type ClaudeEnvPatch = {
   CLAUDE_CONFIG_DIR?: string
+  CLAUDE_CODE_OAUTH_TOKEN?: string
   ANTHROPIC_CUSTOM_HEADERS?: string
 }
 
@@ -27,6 +28,9 @@ export function applyClaudeEnvPatch(
   if (patch.CLAUDE_CONFIG_DIR) {
     baseEnv.CLAUDE_CONFIG_DIR = patch.CLAUDE_CONFIG_DIR
   }
+  if (patch.CLAUDE_CODE_OAUTH_TOKEN) {
+    baseEnv.CLAUDE_CODE_OAUTH_TOKEN = patch.CLAUDE_CODE_OAUTH_TOKEN
+  }
   if (patch.ANTHROPIC_CUSTOM_HEADERS !== undefined) {
     baseEnv.ANTHROPIC_CUSTOM_HEADERS = patch.ANTHROPIC_CUSTOM_HEADERS
   }
@@ -42,6 +46,11 @@ export function hasClaudeAuthEnvConflict(env: Record<string, string> | undefined
     CLAUDE_AUTH_ENV_VARS.some((key) => Boolean(env[key])) ||
     isAuthLikeCustomHeaders(env.ANTHROPIC_CUSTOM_HEADERS)
   )
+}
+
+export function getClaudeAuthEnvVarsToDelete(patch: ClaudeEnvPatch): string[] {
+  const preserved = new Set(Object.keys(patch))
+  return [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS'].filter((key) => !preserved.has(key))
 }
 
 function isAuthLikeCustomHeaders(value: string | undefined): boolean {

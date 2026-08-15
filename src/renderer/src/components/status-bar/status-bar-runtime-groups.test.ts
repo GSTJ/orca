@@ -89,6 +89,33 @@ describe('status bar runtime switch groups', () => {
     ])
   })
 
+  it('uses the user label for setup-token accounts without an email', () => {
+    const state: ClaudeRateLimitAccountsState = {
+      accounts: [
+        {
+          id: 'claude-setup-token',
+          email: '',
+          label: 'Work Claude',
+          managedAuthRuntime: 'host',
+          wslDistro: null,
+          authMethod: 'setup-token',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeAccountId: 'claude-setup-token',
+      activeAccountIdsByRuntime: { host: 'claude-setup-token', wsl: {} }
+    }
+
+    expect(
+      buildClaudeStatusSwitchGroups(state, { runtime: 'host', wslDistro: null })[0]?.targets[1]
+        ?.label
+    ).toBe('Work Claude')
+  })
+
   it('keeps Claude WSL system-default available without managed Claude accounts', () => {
     const state: ClaudeRateLimitAccountsState = {
       accounts: [],

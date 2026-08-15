@@ -2165,6 +2165,12 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:add', args),
+    addSetupToken: (args: {
+      label: string
+      token: string
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:addSetupToken', args),
     cancelPendingLogin: (): Promise<boolean> =>
       ipcRenderer.invoke('claudeAccounts:cancelPendingLogin'),
     reauthenticate: (args: { accountId: string }): Promise<unknown> =>

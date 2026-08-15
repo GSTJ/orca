@@ -199,7 +199,8 @@ function getClaudeAccountLabel(
   if (accountId == null) {
     return 'System default'
   }
-  return state.accounts.find((account) => account.id === accountId)?.email ?? 'Claude account'
+  const account = state.accounts.find((entry) => entry.id === accountId)
+  return account?.label || account?.email || 'Claude account'
 }
 
 function getCodexAccountRuntimeLabel(
@@ -388,8 +389,16 @@ export function AccountsPane({
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
   const [claudeAction, setClaudeAction] = useState<
-    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string}`
+    | 'idle'
+    | 'adding'
+    | 'adding-setup-token'
+    | `reauth:${string}`
+    | `remove:${string}`
+    | `select:${string}`
   >('idle')
+  const [setupTokenDialogOpen, setSetupTokenDialogOpen] = useState(false)
+  const [setupTokenLabel, setSetupTokenLabel] = useState('')
+  const [setupToken, setSetupToken] = useState('')
   // Why: capture the account's runtime slot when the dialog opens; the roster
   // can change underneath an open dialog and lose the slot to diff for restarts.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<{
@@ -785,7 +794,7 @@ export function AccountsPane({
     action: typeof claudeAction,
     operation: () => Promise<ClaudeRateLimitAccountsState>,
     actionRuntime: ProviderAccountRuntimeView = accountRuntime
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const previousActiveAccountId = getProviderAccountActiveIdForView(claudeAccounts, actionRuntime)
     setClaudeAction(action)
     try {
@@ -814,9 +823,10 @@ export function AccountsPane({
           }
         )
       }
+      return true
     } catch (error) {
       if (isClaudeAccountCancellation(error)) {
-        return
+        return false
       }
       toast.error(
         translate(
@@ -827,8 +837,25 @@ export function AccountsPane({
           description: getClaudeAccountErrorDescription(error)
         }
       )
+      return false
     } finally {
       setClaudeAction('idle')
+    }
+  }
+
+  const addClaudeSetupToken = async (): Promise<void> => {
+    const added = await runClaudeAccountAction('adding-setup-token', () =>
+      window.api.claudeAccounts.addSetupToken({
+        label: setupTokenLabel,
+        token: setupToken,
+        runtime: accountRuntime.runtime,
+        wslDistro: accountRuntime.wslDistro
+      })
+    )
+    if (added) {
+      setSetupTokenDialogOpen(false)
+      setSetupTokenLabel('')
+      setSetupToken('')
     }
   }
 
@@ -911,6 +938,28 @@ export function AccountsPane({
                   <Plus className="size-3" />
                 )}
                 {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => setSetupTokenDialogOpen(true)}
+                disabled={
+                  isRemoteAccountScope ||
+                  claudeAction !== 'idle' ||
+                  wslCapabilitiesLoading ||
+                  accountRuntimeUnavailable
+                }
+                className="gap-1.5"
+              >
+                {claudeAction === 'adding-setup-token' ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Lock className="size-3" />
+                )}
+                {translate(
+                  'auto.components.settings.AccountsPane.addSetupToken',
+                  'Add setup token'
+                )}
               </Button>
               {claudeAction === 'adding' ? (
                 <Button
@@ -1025,13 +1074,31 @@ export function AccountsPane({
                         className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
                       >
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className="truncate text-sm font-medium">{account.email}</span>
+                          <span className="truncate text-sm font-medium">
+                            {account.label ||
+                              account.email ||
+                              translate(
+                                'auto.components.settings.AccountsPane.claudeAccount',
+                                'Claude account'
+                              )}
+                          </span>
                           <Badge
                             variant="outline"
                             className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
                           >
                             {getClaudeAccountRuntimeLabel(account, accountRuntime.label)}
                           </Badge>
+                          {account.authMethod === 'setup-token' ? (
+                            <Badge
+                              variant="outline"
+                              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
+                            >
+                              {translate(
+                                'auto.components.settings.AccountsPane.setupTokenBadge',
+                                'Setup token'
+                              )}
+                            </Badge>
+                          ) : null}
                           {isActive ? (
                             <Badge
                               variant="outline"
@@ -1045,39 +1112,47 @@ export function AccountsPane({
                           ) : null}
                         </div>
                         <span className="truncate text-[11px] text-muted-foreground">
-                          {account.organizationName
-                            ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
-                            : formatAccountTimestamp(account.lastAuthenticatedAt)}
+                          {account.authMethod === 'setup-token'
+                            ? translate(
+                                'auto.components.settings.AccountsPane.setupTokenUsageUnavailable',
+                                'Usage may be unavailable. Added {{value0}}.',
+                                { value0: formatAccountTimestamp(account.lastAuthenticatedAt) }
+                              )
+                            : account.organizationName
+                              ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
+                              : formatAccountTimestamp(account.lastAuthenticatedAt)}
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            void runClaudeAccountAction(
-                              `reauth:${account.id}`,
-                              () =>
-                                window.api.claudeAccounts.reauthenticate({
-                                  accountId: account.id
-                                }),
-                              getProviderAccountRuntime(account)
-                            )
-                          }}
-                          disabled={isRemoteAccountScope || isBusy}
-                          className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                        >
-                          {isReauthing ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : (
-                            <RefreshCw className="size-3" />
-                          )}
-                          {translate(
-                            'auto.components.settings.AccountsPane.8a0f870153',
-                            'Re-authenticate'
-                          )}
-                        </Button>
+                        {account.authMethod !== 'setup-token' ? (
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void runClaudeAccountAction(
+                                `reauth:${account.id}`,
+                                () =>
+                                  window.api.claudeAccounts.reauthenticate({
+                                    accountId: account.id
+                                  }),
+                                getProviderAccountRuntime(account)
+                              )
+                            }}
+                            disabled={isRemoteAccountScope || isBusy}
+                            className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                          >
+                            {isReauthing ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="size-3" />
+                            )}
+                            {translate(
+                              'auto.components.settings.AccountsPane.8a0f870153',
+                              'Re-authenticate'
+                            )}
+                          </Button>
+                        ) : null}
                         <Button
                           variant="ghost"
                           size="xs"
@@ -1952,6 +2027,146 @@ export function AccountsPane({
 
   return (
     <div className="space-y-8">
+      <Dialog
+        open={setupTokenDialogOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setSetupTokenDialogOpen(true)
+            return
+          }
+          if (claudeAction === 'adding-setup-token') {
+            return
+          }
+          setSetupTokenDialogOpen(false)
+          setSetupTokenLabel('')
+          setSetupToken('')
+        }}
+      >
+        <DialogContent showCloseButton={false}>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (
+                setupTokenLabel.trim() &&
+                setupToken.trim() &&
+                claudeAction !== 'adding-setup-token'
+              ) {
+                void addClaudeSetupToken()
+              }
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>
+                {translate(
+                  'auto.components.settings.AccountsPane.addSetupTokenTitle',
+                  'Add Claude setup token'
+                )}
+              </DialogTitle>
+              <DialogDescription>
+                {translate(
+                  'auto.components.settings.AccountsPane.addSetupTokenDescription',
+                  'Run claude setup-token, then paste the one-year token.'
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="claude-setup-token-label">
+                  {translate(
+                    'auto.components.settings.AccountsPane.setupTokenAccountLabel',
+                    'Account label (required)'
+                  )}
+                </Label>
+                <Input
+                  id="claude-setup-token-label"
+                  autoFocus
+                  maxLength={100}
+                  value={setupTokenLabel}
+                  onChange={(event) => setSetupTokenLabel(event.target.value)}
+                  placeholder={translate(
+                    'auto.components.settings.AccountsPane.setupTokenLabelPlaceholder',
+                    'Work Claude'
+                  )}
+                  disabled={claudeAction === 'adding-setup-token'}
+                  aria-describedby="claude-setup-token-label-help"
+                />
+                <p id="claude-setup-token-label-help" className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.AccountsPane.setupTokenLabelHelp',
+                    'Setup tokens do not expose your email, so this label identifies the account in Orca.'
+                  )}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="claude-setup-token-value">
+                  {translate(
+                    'auto.components.settings.AccountsPane.setupTokenInputLabel',
+                    'Setup token'
+                  )}
+                </Label>
+                <Input
+                  id="claude-setup-token-value"
+                  type="password"
+                  autoComplete="off"
+                  maxLength={16_384}
+                  value={setupToken}
+                  onChange={(event) => setSetupToken(event.target.value)}
+                  placeholder={translate(
+                    'auto.components.settings.AccountsPane.setupTokenPlaceholder',
+                    'Paste the token from claude setup-token'
+                  )}
+                  spellCheck={false}
+                  disabled={claudeAction === 'adding-setup-token'}
+                  aria-describedby="claude-setup-token-help"
+                />
+                <p id="claude-setup-token-help" className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.AccountsPane.setupTokenHelp',
+                    'Setup tokens support only model requests, so Orca may not be able to show usage.'
+                  )}
+                </p>
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {translate(
+                  'auto.components.settings.AccountsPane.setupTokenRevokeLimit',
+                  "Removing this account deletes only Orca's saved copy of the token. It does not revoke the token. Claude does not currently document a way to list or revoke setup tokens."
+                )}
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSetupTokenDialogOpen(false)
+                  setSetupTokenLabel('')
+                  setSetupToken('')
+                }}
+                disabled={claudeAction === 'adding-setup-token'}
+              >
+                {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  claudeAction === 'adding-setup-token' ||
+                  !setupTokenLabel.trim() ||
+                  !setupToken.trim()
+                }
+              >
+                {claudeAction === 'adding-setup-token' ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : null}
+                {translate(
+                  'auto.components.settings.AccountsPane.addSetupTokenAction',
+                  'Add setup token'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={removeCodexTarget !== null}
         onOpenChange={(open) => !open && setRemoveCodexTarget(null)}

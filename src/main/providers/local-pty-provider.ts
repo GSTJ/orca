@@ -771,6 +771,9 @@ export class LocalPtyProvider implements IPtyProvider {
           // Why: managed WSL Claude passes a Linux CLAUDE_CONFIG_DIR through wsl.exe; non-default vars need WSLENV import.
           addWslEnvKeys(finalEnv, ['CLAUDE_CONFIG_DIR'])
         }
+        if (finalEnv.CLAUDE_CODE_OAUTH_TOKEN) {
+          addWslEnvKeys(finalEnv, ['CLAUDE_CODE_OAUTH_TOKEN'])
+        }
         if (finalEnv[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
           // Why: wsl.exe drops custom Windows env vars; the startup wrapper needs this imported inside WSL.
           addWslEnvKeys(finalEnv, [ORCA_HERMES_STARTUP_QUERY_ENV])

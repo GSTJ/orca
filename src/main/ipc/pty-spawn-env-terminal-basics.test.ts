@@ -156,6 +156,46 @@ describe('registerPtyHandlers', () => {
 
       expect(hasLiveClaudePtys()).toBe(false)
     })
+    it('injects a setup token while stripping inherited Claude credentials', async () => {
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/claude',
+        envPatch: { CLAUDE_CODE_OAUTH_TOKEN: 'setup-token-secret' },
+        stripAuthEnv: true,
+        provenance: 'managed:setup-account:setup-token'
+      }))
+      registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, prepareClaudeAuth)
+      const previousApiKey = process.env.ANTHROPIC_API_KEY
+      const previousOauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN
+      process.env.ANTHROPIC_API_KEY = 'inherited-api-key'
+      process.env.CLAUDE_CODE_OAUTH_TOKEN = 'inherited-token'
+      let spawnedPtyId: string | null = null
+      try {
+        const result = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          command: 'claude'
+        })) as { id: string }
+        spawnedPtyId = result.id
+      } finally {
+        if (spawnedPtyId) {
+          clearProviderPtyState(spawnedPtyId)
+        }
+        if (previousApiKey === undefined) {
+          delete process.env.ANTHROPIC_API_KEY
+        } else {
+          process.env.ANTHROPIC_API_KEY = previousApiKey
+        }
+        if (previousOauthToken === undefined) {
+          delete process.env.CLAUDE_CODE_OAUTH_TOKEN
+        } else {
+          process.env.CLAUDE_CODE_OAUTH_TOKEN = previousOauthToken
+        }
+      }
+
+      const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
+      expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('setup-token-secret')
+      expect(env.ANTHROPIC_API_KEY).toBeUndefined()
+    })
     it('clears Claude live-PTY tracking from shared provider teardown', () => {
       markClaudePtySpawned('ssh-claude-pty')
       expect(hasLiveClaudePtys()).toBe(true)

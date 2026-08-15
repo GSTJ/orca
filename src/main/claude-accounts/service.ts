@@ -76,6 +76,11 @@ export type ClaudeAccountAddTarget = {
   wslDistro?: string | null
 }
 
+export type ClaudeSetupTokenAccountInput = ClaudeAccountAddTarget & {
+  label: string
+  token: string
+}
+
 export type ClaudeAccountImportOptions = ClaudeAccountAddTarget & {
   previousLegacyCredentialsSha256?: string | null
 }
@@ -110,6 +115,12 @@ export class ClaudeAccountService {
 
   async addAccount(target?: ClaudeAccountAddTarget): Promise<ClaudeRateLimitAccountsState> {
     return this.serializeMutation(() => this.doAddAccount(target))
+  }
+
+  async addSetupTokenAccount(
+    input: ClaudeSetupTokenAccountInput
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.serializeMutation(() => this.doAddSetupTokenAccount(input))
   }
 
   /**
@@ -168,6 +179,53 @@ export class ClaudeAccountService {
         previousSettings,
         captured
       )
+    } catch (error) {
+      await this.cleanupFailedAdd(accountId, managedAuth.managedAuthPath, previousSettings, error)
+      throw error
+    }
+  }
+
+  private async doAddSetupTokenAccount(
+    input: ClaudeSetupTokenAccountInput
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const label = typeof input?.label === 'string' ? input.label.trim() : ''
+    const token = typeof input?.token === 'string' ? input.token.trim() : ''
+    if (!label || label.length > 100) {
+      throw new Error('Enter an account label up to 100 characters.')
+    }
+    if (!token || token.length > 16_384 || /[\r\n]/.test(token)) {
+      throw new Error('Paste one valid Claude setup token.')
+    }
+
+    const accountId = randomUUID()
+    const managedAuth = this.createManagedAuthDir(accountId, input)
+    const previousSettings = this.store.getSettings()
+    try {
+      await this.writeManagedSetupToken(accountId, managedAuth.managedAuthPath, token)
+      const now = Date.now()
+      const account: ClaudeManagedAccount = {
+        id: accountId,
+        email: '',
+        label,
+        managedAuthPath: managedAuth.managedAuthPath,
+        managedAuthRuntime: managedAuth.managedAuthRuntime,
+        wslDistro: managedAuth.wslDistro,
+        wslLinuxAuthPath: managedAuth.wslLinuxAuthPath,
+        authMethod: 'setup-token',
+        organizationUuid: null,
+        organizationName: null,
+        createdAt: now,
+        updatedAt: now,
+        lastAuthenticatedAt: now
+      }
+      const selection = normalizeClaudeRuntimeSelection(previousSettings)
+      this.store.updateSettings({
+        claudeManagedAccounts: [...previousSettings.claudeManagedAccounts, account],
+        activeClaudeManagedAccountId: selection.host,
+        activeClaudeManagedAccountIdsByRuntime: selection
+      })
+      this.rateLimits.evictInactiveClaudeCache(accountId)
+      return this.getSnapshot()
     } catch (error) {
       await this.cleanupFailedAdd(accountId, managedAuth.managedAuthPath, previousSettings, error)
       throw error
@@ -328,6 +386,9 @@ export class ClaudeAccountService {
 
   private async doReauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
+    if (account.authMethod === 'setup-token') {
+      throw new Error('Remove this account and add a new setup token.')
+    }
     const managedAuthPath = this.assertManagedAuthPath(account.managedAuthPath, accountId)
     const previousSettings = this.store.getSettings()
     const previousManagedAuth = await this.readManagedAuthSnapshot(accountId, managedAuthPath)
@@ -511,6 +572,7 @@ export class ClaudeAccountService {
     return {
       id: account.id,
       email: account.email,
+      label: account.label?.trim() || account.email || 'Claude account',
       managedAuthRuntime: account.managedAuthRuntime ?? 'host',
       wslDistro: account.wslDistro ?? null,
       authMethod: account.authMethod ?? 'unknown',
@@ -818,6 +880,19 @@ export class ClaudeAccountService {
       await writeManagedClaudeKeychainCredentials(accountId, credentialsJson)
     } else {
       writeClaudeManagedAuthFile(trustedPath, '.credentials.json', credentialsJson)
+    }
+  }
+
+  private async writeManagedSetupToken(
+    accountId: string,
+    managedAuthPath: string,
+    token: string
+  ): Promise<void> {
+    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
+    if (process.platform === 'darwin') {
+      await writeManagedClaudeKeychainCredentials(accountId, token)
+    } else {
+      writeClaudeManagedAuthFile(trustedPath, '.setup-token', token)
     }
   }
 

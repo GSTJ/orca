@@ -5648,7 +5648,21 @@
           "codexSystemDefaultNeedsSignIn": "No Codex sign-in was found for {{value0}}.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "addSetupToken": "Add setup token",
+          "claudeAccount": "Claude account",
+          "setupTokenBadge": "Setup token",
+          "setupTokenUsageUnavailable": "Usage may be unavailable. Added {{value0}}.",
+          "addSetupTokenTitle": "Add Claude setup token",
+          "addSetupTokenDescription": "Run claude setup-token, then paste the one-year token.",
+          "setupTokenAccountLabel": "Account label (required)",
+          "setupTokenLabelPlaceholder": "Work Claude",
+          "setupTokenLabelHelp": "Setup tokens do not expose your email, so this label identifies the account in Orca.",
+          "setupTokenInputLabel": "Setup token",
+          "setupTokenPlaceholder": "Paste the token from claude setup-token",
+          "setupTokenHelp": "Setup tokens support only model requests, so Orca may not be able to show usage.",
+          "setupTokenRevokeLimit": "Removing this account deletes only Orca's saved copy of the token. It does not revoke the token. Claude does not currently document a way to list or revoke setup tokens.",
+          "addSetupTokenAction": "Add setup token"
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",

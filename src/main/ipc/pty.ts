@@ -106,7 +106,10 @@ import {
 } from '../daemon/daemon-errors'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
-import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
+import {
+  getClaudeAuthEnvVarsToDelete,
+  hasClaudeAuthEnvConflict
+} from '../claude-accounts/environment'
 import {
   isClaudeAuthSwitchInProgress,
   markClaudePtyExited,
@@ -4584,7 +4587,9 @@ export function registerPtyHandlers(
       // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
       const launchCommand = codexResumeLaunch.command
       const claudeAuth =
-        isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(codexSelectionTarget) : null
+        isClaudeLaunch && !args.connectionId && prepareClaudeAuth
+          ? await prepareClaudeAuth(codexSelectionTarget)
+          : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -4734,7 +4739,7 @@ export function registerPtyHandlers(
       }
 
       const authEnvToDelete = claudeAuth?.stripAuthEnv
-        ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
+        ? getClaudeAuthEnvVarsToDelete(claudeAuth.envPatch)
         : undefined
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
@@ -6174,7 +6179,7 @@ export function registerPtyHandlers(
           expectedWslDistro
         )
         const claudeAuth =
-          isClaudeLaunch && prepareClaudeAuth
+          isClaudeLaunch && !args.connectionId && prepareClaudeAuth
             ? await prepareClaudeAuth(initialSelectionTarget)
             : null
         spawnTiming.mark('auth')
@@ -6435,7 +6440,7 @@ export function registerPtyHandlers(
           ? { ...env, ORCA_TERMINAL_HANDLE: preAllocatedHandle }
           : env
         const envToDelete = claudeAuth?.stripAuthEnv
-          ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
+          ? getClaudeAuthEnvVarsToDelete(claudeAuth.envPatch)
           : undefined
         let combinedEnvToDelete = mergePtyEnvDeletions(
           envToDelete,
