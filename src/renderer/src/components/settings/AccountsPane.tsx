@@ -33,7 +33,7 @@ import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SettingsSectionStack } from './SettingsSectionStack'
 import { matchesSettingsSearch } from './settings-search'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
-import { rateLimitTargetMatchesAccountRuntime } from './rate-limit-target-match'
+import { useClaudeAccountUsage } from './use-claude-account-usage'
 import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
 import {
   getProviderAccountActiveIdForView,
@@ -84,10 +84,6 @@ export function AccountsPane({
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
-  const claudeRateLimits = useAppStore((s) => s.rateLimits.claude)
-  const claudeRateLimitTarget = useAppStore((s) => s.rateLimits.claudeTarget)
-  const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
-  const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
@@ -190,19 +186,12 @@ export function AccountsPane({
   ).some((account) =>
     providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
   )
-  // Why: same remote gate the Codex auth warning uses below. The desktop's
-  // rate-limit poll says nothing about accounts owned by a remote runtime.
-  const claudeUsageVisible = !isRemoteAccountScope
-  const activeClaudeAccountId = getProviderAccountActiveIdForView(claudeAccounts, accountRuntime)
-  const claudeUsageTargetMatches = rateLimitTargetMatchesAccountRuntime(
-    claudeRateLimitTarget,
+  const claudeUsage = useClaudeAccountUsage({
+    isRemoteAccountScope,
+    claudeAccounts,
+    visibleAccountIds: visibleClaudeAccounts.map((account) => account.id),
     accountRuntime
-  )
-  // Why: re-run the inactive fetch when the roster or the active account moves;
-  // selecting an account leaves the outgoing one with no cache entry.
-  const claudeUsageRosterKey = `${activeClaudeAccountId ?? 'system'}|${visibleClaudeAccounts
-    .map((account) => account.id)
-    .join(',')}`
+  })
   // Why: the system default's real identity is host-scoped (it reflects the
   // runtime's own ~/.codex), so only surface it in the host view. Per-distro
   // WSL falls back to the generic label.
@@ -246,27 +235,6 @@ export function AccountsPane({
   const systemCodexNeedsSignIn = activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
-
-  // Why: without a settled flag a row whose account never gets a cache entry
-  // would show the loading skeleton for the life of the pane.
-  const [claudeUsageFetchSettled, setClaudeUsageFetchSettled] = useState(false)
-  useEffect(() => {
-    // Why: mirrors the switcher's fetch-on-open (StatusBar) so opening this pane
-    // fills inactive-account usage. The service debounces, so a revisit is cheap.
-    if (!claudeUsageVisible) {
-      return
-    }
-    let cancelled = false
-    setClaudeUsageFetchSettled(false)
-    void fetchInactiveClaudeAccountUsage().finally(() => {
-      if (!cancelled) {
-        setClaudeUsageFetchSettled(true)
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [claudeUsageVisible, claudeUsageRosterKey, fetchInactiveClaudeAccountUsage])
 
   const recordOpenCodeSettingEdit = (field: 'cookie' | 'workspaceId' | 'apiKey'): void => {
     if (recordedOpenCodeSettingEditsRef.current.has(field)) {
@@ -383,11 +351,7 @@ export function AccountsPane({
     systemClaudeActive,
     setRemoveClaudeTarget,
     runClaudeAccountAction,
-    claudeUsageVisible,
-    claudeUsageTargetMatches,
-    claudeRateLimits,
-    inactiveClaudeAccounts,
-    claudeUsageFetchSettled,
+    ...claudeUsage,
     codexAccounts,
     codexAction,
     visibleCodexAccounts,

@@ -446,7 +446,11 @@ describe('provider account mutations', () => {
       }
     })
 
-    await selectClaudeProviderAccount(LOCAL, { accountId: 'acc-2', runtime: 'host', wslDistro: null })
+    await selectClaudeProviderAccount(LOCAL, {
+      accountId: 'acc-2',
+      runtime: 'host',
+      wslDistro: null
+    })
 
     expect(useAppStore.getState().rateLimits.claude).toBeNull()
   })
