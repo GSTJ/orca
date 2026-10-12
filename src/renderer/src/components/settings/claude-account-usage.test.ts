@@ -29,13 +29,14 @@ function entry(overrides: Partial<InactiveAccountUsage>): InactiveAccountUsage {
   return { accountId: 'b', rateLimits: null, updatedAt: 0, isFetching: false, ...overrides }
 }
 
+const noInactiveAccounts: InactiveAccountUsage[] = []
 const base = {
   accountId: 'b',
   isActive: false,
   visible: true,
   targetMatchesRuntime: true,
   activeLimits: null,
-  inactiveAccounts: [] as InactiveAccountUsage[],
+  inactiveAccounts: noInactiveAccounts,
   inactiveFetchSettled: false
 }
 

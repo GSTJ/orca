@@ -3,23 +3,20 @@ import { useAppStore } from '@/store'
 import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { rateLimitTargetMatchesAccountRuntime } from './rate-limit-target-match'
 import type { AccountRuntime } from './rate-limit-target-match'
-import { getProviderAccountActiveIdForView } from './provider-account-visibility'
+import {
+  getProviderAccountActiveIdForView,
+  providerAccountMatchesView
+} from './provider-account-visibility'
 
 /**
  * Feeds the Accounts pane's per-row Claude usage: reads the rate-limit slices
  * and re-runs the inactive-account fetch when the roster or active account moves.
  */
-export function useClaudeAccountUsage({
-  isRemoteAccountScope,
-  claudeAccounts,
-  visibleAccountIds,
-  accountRuntime
-}: {
-  isRemoteAccountScope: boolean
-  claudeAccounts: ClaudeRateLimitAccountsState
-  visibleAccountIds: string[]
-  accountRuntime: AccountRuntime
-}): {
+export function useClaudeAccountUsage(
+  claudeAccounts: ClaudeRateLimitAccountsState,
+  accountRuntime: AccountRuntime,
+  visibilityOptions: Parameters<typeof providerAccountMatchesView>[2]
+): {
   claudeUsageVisible: boolean
   claudeUsageTargetMatches: boolean
   claudeRateLimits: ReturnType<typeof useAppStore.getState>['rateLimits']['claude']
@@ -34,7 +31,7 @@ export function useClaudeAccountUsage({
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   // Why: same remote gate the Codex auth warning uses. The desktop's
   // rate-limit poll says nothing about accounts owned by a remote runtime.
-  const claudeUsageVisible = !isRemoteAccountScope
+  const claudeUsageVisible = !visibilityOptions.remoteOwner
   const claudeUsageTargetMatches = rateLimitTargetMatchesAccountRuntime(
     claudeRateLimitTarget,
     accountRuntime
@@ -42,6 +39,9 @@ export function useClaudeAccountUsage({
   // Why: re-run the inactive fetch when the roster or the active account moves;
   // selecting an account leaves the outgoing one with no cache entry.
   const activeId = getProviderAccountActiveIdForView(claudeAccounts, accountRuntime)
+  const visibleAccountIds = claudeAccounts.accounts
+    .filter((account) => providerAccountMatchesView(account, accountRuntime, visibilityOptions))
+    .map((account) => account.id)
   const rosterKey = `${activeId ?? 'system'}|${visibleAccountIds.join(',')}`
   // Why: without a settled flag a row whose account never gets a cache entry
   // would show the loading skeleton for the life of the pane.

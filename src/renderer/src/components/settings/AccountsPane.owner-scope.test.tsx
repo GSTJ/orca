@@ -27,12 +27,14 @@ const fake = vi.hoisted(() => {
   const state: {
     pendingSelect: ((roster: unknown) => void) | null
     write: ReturnType<typeof vi.fn>
+    fetchInactiveClaude: ReturnType<typeof vi.fn>
     rosters: Map<string, unknown>
     watchedTargets: unknown[]
     selects: unknown[][]
   } = {
     pendingSelect: null,
     write: vi.fn(),
+    fetchInactiveClaude: vi.fn(() => Promise.resolve()),
     rosters: new Map(),
     watchedTargets: [],
     selects: []
@@ -54,11 +56,15 @@ vi.mock('@/store', () => ({
       rateLimits: {
         codex: null,
         codexTarget: { runtime: 'host', wslDistro: null },
+        claude: null,
+        claudeTarget: { runtime: 'host', wslDistro: null },
+        inactiveClaudeAccounts: [],
         minimax: null,
         cursor: { updatedAt: 0 },
         grok: { updatedAt: 0 }
       },
       runtimeEnvironments: [],
+      fetchInactiveClaudeAccountUsage: fake.fetchInactiveClaude,
       recordFeatureInteraction: fake.write,
       fetchSettings: fake.write
     })

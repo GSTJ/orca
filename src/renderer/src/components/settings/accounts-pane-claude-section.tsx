@@ -310,9 +310,12 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                           {isActive ? (
                             <Badge
                               variant="outline"
-                              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
+                              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
                             >
-                              {getClaudeAccountRuntimeLabel(account, accountRuntime.label)}
+                              {translate(
+                                'auto.components.settings.AccountsPane.e74831fb6b',
+                                'Active'
+                              )}
                             </Badge>
                           ) : null}
                         </div>

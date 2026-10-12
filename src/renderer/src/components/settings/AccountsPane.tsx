@@ -196,12 +196,6 @@ export function AccountsPane({
   ).some((account) =>
     providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
   )
-  const claudeUsage = useClaudeAccountUsage({
-    isRemoteAccountScope,
-    claudeAccounts,
-    visibleAccountIds: visibleClaudeAccounts.map((account) => account.id),
-    accountRuntime
-  })
   // Why: the system default's real identity is host-scoped (it reflects the
   // runtime's own ~/.codex), so only surface it in the host view. Per-distro
   // WSL falls back to the generic label.
@@ -365,7 +359,7 @@ export function AccountsPane({
     systemClaudeActive,
     setRemoveClaudeTarget,
     runClaudeAccountAction,
-    ...claudeUsage,
+    ...useClaudeAccountUsage(claudeAccounts, accountRuntime, accountVisibilityOptions),
     codexAccounts,
     codexAction,
     visibleCodexAccounts,

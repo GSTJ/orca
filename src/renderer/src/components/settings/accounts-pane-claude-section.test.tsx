@@ -89,6 +89,11 @@ function render(
     accountRuntimeUnavailable: false,
     accountVisibilityOptions: { remoteOwner: false, ownerPlatform: 'darwin' },
     claudeAccounts,
+    claudeUsageVisible: false,
+    claudeUsageTargetMatches: true,
+    claudeRateLimits: null,
+    inactiveClaudeAccounts: [],
+    claudeUsageFetchSettled: true,
     claudeAction: 'idle',
     isRemoteAccountScope: false,
     remoteAccountScopeNotice: null,
@@ -104,7 +109,7 @@ function render(
 
 function selectButtons(markup: string): string[] {
   return [
-    ...markup.matchAll(/<button type="button"[^>]*class="flex min-w-0 flex-1[^"]*"[^>]*>/g)
+    ...markup.matchAll(/<button type="button"[^>]*class="flex min-w-0 flex-col[^"]*"[^>]*>/g)
   ].map(([button]) => button)
 }
 
