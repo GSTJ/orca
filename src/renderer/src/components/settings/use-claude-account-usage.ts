@@ -5,6 +5,7 @@ import { rateLimitTargetMatchesAccountRuntime } from './rate-limit-target-match'
 import type { AccountRuntime } from './rate-limit-target-match'
 import {
   getProviderAccountActiveIdForView,
+  providerAccountIsActiveInView,
   providerAccountMatchesView
 } from './provider-account-visibility'
 
@@ -15,8 +16,11 @@ import {
 export function useClaudeAccountUsage(
   claudeAccounts: ClaudeRateLimitAccountsState,
   accountRuntime: AccountRuntime,
-  visibilityOptions: Parameters<typeof providerAccountMatchesView>[2]
+  visibilityOptions: Parameters<typeof providerAccountMatchesView>[2],
+  ownerPlatformUnknown: boolean
 ): {
+  visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
+  systemClaudeActive: boolean
   claudeUsageVisible: boolean
   claudeUsageTargetMatches: boolean
   claudeRateLimits: ReturnType<typeof useAppStore.getState>['rateLimits']['claude']
@@ -39,9 +43,17 @@ export function useClaudeAccountUsage(
   // Why: re-run the inactive fetch when the roster or the active account moves;
   // selecting an account leaves the outgoing one with no cache entry.
   const activeId = getProviderAccountActiveIdForView(claudeAccounts, accountRuntime)
-  const visibleAccountIds = claudeAccounts.accounts
-    .filter((account) => providerAccountMatchesView(account, accountRuntime, visibilityOptions))
-    .map((account) => account.id)
+  const visibleClaudeAccounts = claudeAccounts.accounts.filter((account) =>
+    providerAccountMatchesView(account, accountRuntime, visibilityOptions)
+  )
+  const visibleAccountIds = visibleClaudeAccounts.map((account) => account.id)
+  // Why: System default lights only when no account row is active; while a remote
+  // owner's platform is unknown WSL rows hide fail-closed, so check the full roster.
+  const systemClaudeActive = !(
+    ownerPlatformUnknown ? claudeAccounts.accounts : visibleClaudeAccounts
+  ).some((account) =>
+    providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, visibilityOptions)
+  )
   const rosterKey = `${activeId ?? 'system'}|${visibleAccountIds.join(',')}`
   // Why: without a settled flag a row whose account never gets a cache entry
   // would show the loading skeleton for the life of the pane.
@@ -64,6 +76,8 @@ export function useClaudeAccountUsage(
     }
   }, [claudeUsageVisible, rosterKey, fetchInactiveClaudeAccountUsage])
   return {
+    visibleClaudeAccounts,
+    systemClaudeActive,
     claudeUsageVisible,
     claudeUsageTargetMatches,
     claudeRateLimits,

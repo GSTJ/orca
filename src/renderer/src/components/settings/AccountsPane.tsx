@@ -176,9 +176,6 @@ export function AccountsPane({
     remoteOwner: isRemoteAccountScope,
     ownerPlatform: accountOwnerPlatform
   }
-  const visibleClaudeAccounts = claudeAccounts.accounts.filter((account) =>
-    providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
-  )
   const visibleCodexAccounts = codexAccounts.accounts.filter((account) =>
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
@@ -191,10 +188,11 @@ export function AccountsPane({
   ).some((account) =>
     providerAccountIsActiveInView(account, codexAccounts, accountRuntime, accountVisibilityOptions)
   )
-  const systemClaudeActive = !(
-    ownerPlatformUnknown ? claudeAccounts.accounts : visibleClaudeAccounts
-  ).some((account) =>
-    providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
+  const { visibleClaudeAccounts, systemClaudeActive, ...claudeUsage } = useClaudeAccountUsage(
+    claudeAccounts,
+    accountRuntime,
+    accountVisibilityOptions,
+    ownerPlatformUnknown
   )
   // Why: the system default's real identity is host-scoped (it reflects the
   // runtime's own ~/.codex), so only surface it in the host view. Per-distro
@@ -359,7 +357,7 @@ export function AccountsPane({
     systemClaudeActive,
     setRemoveClaudeTarget,
     runClaudeAccountAction,
-    ...useClaudeAccountUsage(claudeAccounts, accountRuntime, accountVisibilityOptions),
+    ...claudeUsage,
     codexAccounts,
     codexAction,
     visibleCodexAccounts,
